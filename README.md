@@ -12,7 +12,8 @@ app/
 │   ├── __init__.py
 │   └── routes/
 │       ├── __init__.py
-│       └── webhook.py      # Siren webhook handlers
+│       ├── webhooks.py     # Siren webhook handlers (active)
+│       └── admin.py        # Admin utilities (no auth for now)
 ├── core/                   # Core application components
 │   ├── __init__.py
 │   ├── config.py          # Application configuration
@@ -50,16 +51,19 @@ app/
 ## Setup
 
 1. Install Poetry (if not already installed):
+
    ```bash
    curl -sSL https://install.python-poetry.org | python3 -
    ```
 
 2. Install dependencies:
+
    ```bash
    poetry install
    ```
 
 3. Copy environment variables:
+
    ```bash
    cp .env.example .env
    ```
@@ -67,11 +71,13 @@ app/
 4. Configure your environment variables in `.env`
 
 5. Run the application:
+
    ```bash
    poetry run python -m app.main
    ```
-   
+
    Or activate the virtual environment and run directly:
+
    ```bash
    poetry shell
    python -m app.main
@@ -80,20 +86,22 @@ app/
 ## API Endpoints
 
 - `GET /health` - Health check endpoint
-- `POST /api/v1/webhook/siren` - Siren message webhook
-- `POST /api/v1/webhook/siren/delivery` - Siren delivery status webhook
+- `POST /api/v1/webhooks/siren/message` - Siren message webhook
+- `POST /api/v1/webhooks/siren/delivery-status` - Siren delivery status webhook
 
 ## Environment Variables
 
 See `.env.example` for required configuration variables including:
-- Database connection (Supabase)
-- AI service API keys (Sarvam, Gemini, LiteLLM)
-- Siren AI Toolkit configuration
-- Security settings
+
+- **DATABASE_URL** (PostgreSQL DSN; Supabase used only as DB)
+- **SARVAM_API_KEY**, **GEMINI_API_KEY**
+- **SIREN_API_KEY**, **SIREN_WEBHOOK_SECRET**
+- **ENCRYPTION_KEY** (>=32 chars)
 
 ## Architecture
 
 The application follows a clean architecture pattern with:
+
 - **API Layer**: FastAPI routes and webhook handlers
 - **Service Layer**: Business logic and orchestration
 - **Repository Layer**: Data access and persistence
@@ -103,6 +111,7 @@ The application follows a clean architecture pattern with:
 ## Next Steps
 
 This foundational setup provides the core structure for implementing the bill splitting agent. The next tasks will involve:
+
 1. Database models and migrations
 2. Siren integration layer
 3. Conversation state management

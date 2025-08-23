@@ -1,26 +1,24 @@
 """
-Supabase database connection and configuration
+PostgreSQL database connection and configuration
 """
-from supabase import create_client, Client
+
+# ruff: noqa: E501, W291, W293
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 from sqlalchemy.exc import SQLAlchemyError, DisconnectionError
 from app.core.config import settings
 import logging
 import asyncio
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Dict, cast, Any
 
 logger = logging.getLogger(__name__)
 
-# Supabase client for real-time features and auth
-supabase: Client = create_client(settings.supabase_url, settings.supabase_key)
-
-# Enhanced SQLAlchemy setup with improved connection pooling
+# SQLAlchemy setup with connection pooling
 engine = create_engine(
-    settings.database_url or f"postgresql://postgres:{settings.supabase_key}@{settings.supabase_url.split('//')[1]}/postgres",
+    settings.database_url,
     # Connection pool settings for better performance and reliability
     poolclass=QueuePool,
     pool_size=10,  # Number of connections to maintain in the pool
@@ -34,16 +32,17 @@ engine = create_engine(
         "application_name": "bill_splitting_agent",
         "options": "-c timezone=UTC",
         "sslmode": "prefer",  # Use SSL when available
-        "target_session_attrs": "read-write"  # Ensure we connect to primary
+        "target_session_attrs": "read-write",  # Ensure we connect to primary
     },
     echo=settings.debug,
     # Improved error handling
     echo_pool=settings.debug,
 )
 
+
 # Add connection event listeners for better error handling
 @event.listens_for(engine, "connect")
-def set_postgres_settings(dbapi_connection, connection_record):
+def set_postgres_settings(dbapi_connection: Any, connection_record: Any) -> None:
     """Set connection-level settings for PostgreSQL"""
     try:
         with dbapi_connection.cursor() as cursor:
@@ -56,59 +55,60 @@ def set_postgres_settings(dbapi_connection, connection_record):
     except Exception as e:
         logger.warning(f"Failed to set connection settings: {e}")
 
+
 @event.listens_for(engine, "checkout")
-def receive_checkout(dbapi_connection, connection_record, connection_proxy):
+def receive_checkout(
+    dbapi_connection: Any, connection_record: Any, connection_proxy: Any
+) -> None:
     """Log connection checkout for monitoring"""
     logger.debug("Connection checked out from pool")
 
+
 @event.listens_for(engine, "checkin")
-def receive_checkin(dbapi_connection, connection_record):
+def receive_checkin(dbapi_connection: Any, connection_record: Any) -> None:
     """Log connection checkin for monitoring"""
     logger.debug("Connection returned to pool")
 
-SessionLocal = sessionmaker(
-    autocommit=False, 
-    autoflush=False, 
-    bind=engine,
-    expire_on_commit=False  # Keep objects accessible after commit
+
+SessionLocal: sessionmaker = sessionmaker(
+    autocommit=False, autoflush=False, bind=engine, expire_on_commit=False
 )
 Base = declarative_base()
 
 
-def get_db():
-    """Database dependency for FastAPI with enhanced error handling"""
-    db = SessionLocal()
-    try:
-        yield db
-    except DisconnectionError as e:
-        logger.error(f"Database disconnection error: {e}")
-        db.rollback()
-        # Attempt to reconnect
-        try:
-            db.close()
-            db = SessionLocal()
-            yield db
-        except Exception as reconnect_error:
-            logger.error(f"Failed to reconnect to database: {reconnect_error}")
-            raise
-    except SQLAlchemyError as e:
-        logger.error(f"Database error: {e}")
-        db.rollback()
-        raise
-    except Exception as e:
-        logger.error(f"Unexpected database error: {e}")
-        db.rollback()
-        raise
-    finally:
-        db.close()
+class DatabaseProxy:
+    """A thin async-friendly proxy over a synchronous SQLAlchemy Session.
+
+    - For repositories, attribute access proxies to the underlying Session.
+    - For simple health checks in routes, provides an async execute method.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def __getattr__(self, name: str):  # passthrough for ORM usage
+        return getattr(self._session, name)
+
+    async def execute(self, sql: str):  # used in a few async routes with `await`
+        return self._session.execute(text(sql))
+
+
+def get_db() -> Session:
+    """Return a synchronous SQLAlchemy session for use by repositories."""
+    return cast(Session, SessionLocal())
+
+
+def get_database() -> DatabaseProxy:
+    """Return a DatabaseProxy compatible with existing call sites."""
+    return DatabaseProxy(get_db())
 
 
 @asynccontextmanager
-async def get_db_async() -> AsyncGenerator[SessionLocal, None]:
+async def get_db_async() -> AsyncGenerator[Session, None]:
     """Async context manager for database sessions with retry logic"""
     max_retries = 3
     retry_delay = 1
-    
+
     for attempt in range(max_retries):
         db = SessionLocal()
         try:
@@ -119,7 +119,7 @@ async def get_db_async() -> AsyncGenerator[SessionLocal, None]:
             db.rollback()
             db.close()
             if attempt < max_retries - 1:
-                await asyncio.sleep(retry_delay * (2 ** attempt))  # Exponential backoff
+                await asyncio.sleep(retry_delay * (2**attempt))  # Exponential backoff
             else:
                 raise
         except SQLAlchemyError as e:
@@ -136,15 +136,15 @@ async def get_db_async() -> AsyncGenerator[SessionLocal, None]:
             db.close()
             raise
         finally:
-            if 'db' in locals():
+            if "db" in locals():
                 db.close()
 
 
-async def init_database():
+async def init_database() -> None:
     """Initialize database connection and create tables with migration support"""
     try:
         logger.info("Starting database initialization...")
-        
+
         # Test connection with retry logic
         max_retries = 3
         for attempt in range(max_retries):
@@ -154,45 +154,50 @@ async def init_database():
                     test_result = result.fetchone()
                     if test_result and test_result[0] == 1:
                         logger.info("Database connection established successfully")
-                        
+
                         # Test database permissions
                         try:
-                            conn.execute(text("CREATE TEMP TABLE test_permissions (id INTEGER)"))
+                            conn.execute(
+                                text("CREATE TEMP TABLE test_permissions (id INTEGER)")
+                            )
                             conn.execute(text("DROP TABLE test_permissions"))
                             logger.info("Database permissions verified")
                         except Exception as perm_error:
-                            logger.warning(f"Database permission test failed: {perm_error}")
-                        
+                            logger.warning(
+                                f"Database permission test failed: {perm_error}"
+                            )
+
                         break
             except Exception as e:
                 logger.warning(f"Connection attempt {attempt + 1} failed: {e}")
                 if attempt == max_retries - 1:
                     raise
-                await asyncio.sleep(2 ** attempt)  # Exponential backoff
-        
+                await asyncio.sleep(2**attempt)  # Exponential backoff
+
         # Import and run migrations
         from app.database.migrations import migration_manager
-        
+
         # Check database health
         health_status = await migration_manager.check_database_health()
         logger.info(f"Database health status: {health_status}")
-        
+
         # Run initial migration if needed
-        if health_status.get('missing_tables'):
+        if health_status.get("missing_tables"):
             logger.info("Running initial database migration...")
-            success = await migration_manager.run_migration('initial')
+            success = await migration_manager.run_migration("initial")
             if not success:
                 raise Exception("Initial migration failed")
-            
+
             # Validate the migration
             logger.info("Validating database schema...")
-            validation_success = await migration_manager.run_migration('validate')
+            validation_success = await migration_manager.run_migration("validate")
             if not validation_success:
                 raise Exception("Database schema validation failed")
-        
+
         # Test encryption functionality
         try:
             from app.database.encryption import encryption
+
             test_data = "test_encryption_data"
             encrypted = encryption.encrypt(test_data)
             decrypted = encryption.decrypt(encrypted)
@@ -202,15 +207,15 @@ async def init_database():
         except Exception as e:
             logger.error(f"Encryption test failed: {e}")
             raise
-        
+
         logger.info("Database initialization completed successfully")
-        
+
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
 
 
-async def close_database():
+async def close_database() -> None:
     """Properly close database connections"""
     try:
         engine.dispose()
@@ -220,14 +225,12 @@ async def close_database():
 
 
 # Database health check function
-async def check_database_health() -> dict:
+async def check_database_health() -> Dict[str, str]:
     """Check database health and return status"""
     try:
         from app.database.migrations import migration_manager
+
         return await migration_manager.check_database_health()
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
-        return {
-            'status': 'unhealthy',
-            'error': str(e)
-        }
+        return {"status": "unhealthy", "error": str(e)}
