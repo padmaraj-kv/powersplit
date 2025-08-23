@@ -104,29 +104,21 @@ class ConversationFactory:
             contact_manager = self.get_contact_manager()
             bill_splitter = self.get_bill_splitter()
             self._step_handlers = {
-                ConversationStep.INITIAL: InitialStepHandler(ai_service=ai_service),
-                ConversationStep.EXTRACTING_BILL: BillExtractionHandler(
-                    ai_service=ai_service
-                ),
-                ConversationStep.CONFIRMING_BILL: BillConfirmationHandler(
-                    ai_service=ai_service
-                ),
+                ConversationStep.INITIAL: InitialStepHandler(),
+                ConversationStep.EXTRACTING_BILL: BillExtractionHandler(),
+                ConversationStep.CONFIRMING_BILL: BillConfirmationHandler(),
                 ConversationStep.COLLECTING_CONTACTS: ContactCollectionHandler(
-                    ai_service=ai_service, contact_manager=contact_manager
+                    contact_manager=contact_manager
                 ),
                 ConversationStep.CALCULATING_SPLITS: SplitCalculationHandler(
-                    ai_service=ai_service, bill_splitter=bill_splitter
+                    bill_splitter=bill_splitter
                 ),
                 ConversationStep.CONFIRMING_SPLITS: SplitConfirmationHandler(
-                    ai_service=ai_service, bill_splitter=bill_splitter
+                    bill_splitter=bill_splitter
                 ),
-                ConversationStep.SENDING_REQUESTS: PaymentRequestHandler(
-                    ai_service=ai_service
-                ),
-                ConversationStep.TRACKING_PAYMENTS: PaymentTrackingHandler(
-                    ai_service=ai_service
-                ),
-                ConversationStep.COMPLETED: CompletionHandler(ai_service=ai_service),
+                ConversationStep.SENDING_REQUESTS: PaymentRequestHandler(),
+                ConversationStep.TRACKING_PAYMENTS: PaymentTrackingHandler(ai_service),
+                ConversationStep.COMPLETED: CompletionHandler(),
             }
         return self._step_handlers
 

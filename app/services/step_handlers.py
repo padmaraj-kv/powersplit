@@ -518,8 +518,8 @@ class BillConfirmationHandler(BaseStepHandler):
 class ContactCollectionHandler(BaseStepHandler):
     """Handler for collecting participant contacts"""
 
-    def __init__(self, ai_service, contact_manager=None):
-        super().__init__(ai_service)
+    def __init__(self, contact_manager=None):
+        super().__init__(None)
         self.contact_manager = contact_manager
 
     async def handle_message(
@@ -688,8 +688,8 @@ class SplitCalculationHandler(BaseStepHandler):
     Implements requirements 2.1, 2.2, 2.3
     """
 
-    def __init__(self, ai_service, bill_splitter=None):
-        super().__init__(ai_service)
+    def __init__(self, bill_splitter=None):
+        super().__init__(None)
         from app.services.bill_splitter import BillSplitter
 
         self.bill_splitter = bill_splitter or BillSplitter()
@@ -890,8 +890,8 @@ class SplitConfirmationHandler(BaseStepHandler):
     Implements requirements 2.4, 2.5
     """
 
-    def __init__(self, ai_service, bill_splitter=None):
-        super().__init__(ai_service)
+    def __init__(self, bill_splitter=None):
+        super().__init__(None)
         from app.services.bill_splitter import BillSplitter
 
         self.bill_splitter = bill_splitter or BillSplitter()
@@ -1130,41 +1130,6 @@ class PaymentRequestHandler(BaseStepHandler):
             ),
             next_step=ConversationStep.TRACKING_PAYMENTS,
             context_updates={"requests_sent": True},
-        )
-
-
-class PaymentTrackingHandler(BaseStepHandler):
-    """Handler for tracking payment confirmations"""
-
-    async def handle_message(
-        self, state: ConversationState, message: Message
-    ) -> StepResult:
-        """Handle payment tracking"""
-        # Placeholder implementation
-        return StepResult(
-            response=Response(
-                content="Payment tracking not fully implemented yet. Marking as completed.",
-                message_type=MessageType.TEXT,
-            ),
-            next_step=ConversationStep.COMPLETED,
-            context_updates={"payments_tracked": True},
-        )
-
-
-class CompletionHandler(BaseStepHandler):
-    """Handler for completed bill splitting"""
-
-    async def handle_message(
-        self, state: ConversationState, message: Message
-    ) -> StepResult:
-        """Handle completion step"""
-        return StepResult(
-            response=Response(
-                content="Bill splitting completed! Send me another bill if you need help with more splits.",
-                message_type=MessageType.TEXT,
-            ),
-            next_step=ConversationStep.INITIAL,
-            context_updates={"completed": True},
         )
 
 

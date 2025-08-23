@@ -1,17 +1,28 @@
 """
 Database repository implementations for data access layer
 """
+
 from typing import List, Optional, Dict, Any
 from uuid import UUID
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import and_, or_, desc, func
-from app.models.database import User, Contact, Bill, BillParticipant, PaymentRequest, ConversationState
+from app.models.database import (
+    User,
+    Contact,
+    Bill,
+    BillParticipant,
+    PaymentRequest,
+    ConversationState,
+)
 from app.models.enums import PaymentStatus
 from app.interfaces.repositories import (
-    UserRepository, ContactRepository, BillRepository, 
-    PaymentRepository, ConversationRepository
+    UserRepository,
+    ContactRepository,
+    BillRepository,
+    PaymentRepository,
+    ConversationRepository,
 )
 import logging
 
@@ -20,10 +31,10 @@ logger = logging.getLogger(__name__)
 
 class SQLUserRepository(UserRepository):
     """SQLAlchemy implementation of UserRepository"""
-    
+
     def __init__(self, db: Session):
         self.db = db
-    
+
     async def create_user(self, phone_number: str, name: Optional[str] = None) -> User:
         """Create a new user"""
         try:
@@ -37,7 +48,7 @@ class SQLUserRepository(UserRepository):
             self.db.rollback()
             logger.error(f"Failed to create user: {e}")
             raise
-    
+
     async def get_user_by_phone(self, phone_number: str) -> Optional[User]:
         """Get user by phone number"""
         try:
@@ -50,7 +61,7 @@ class SQLUserRepository(UserRepository):
         except SQLAlchemyError as e:
             logger.error(f"Failed to get user by phone: {e}")
             raise
-    
+
     async def get_user_by_id(self, user_id: UUID) -> Optional[User]:
         """Get user by ID"""
         try:
@@ -58,18 +69,18 @@ class SQLUserRepository(UserRepository):
         except SQLAlchemyError as e:
             logger.error(f"Failed to get user by ID: {e}")
             raise
-    
+
     async def update_user(self, user_id: UUID, **kwargs) -> Optional[User]:
         """Update user information"""
         try:
             user = await self.get_user_by_id(user_id)
             if not user:
                 return None
-            
+
             for key, value in kwargs.items():
                 if hasattr(user, key):
                     setattr(user, key, value)
-            
+
             self.db.commit()
             self.db.refresh(user)
             logger.info(f"Updated user {user_id}")
@@ -78,7 +89,7 @@ class SQLUserRepository(UserRepository):
             self.db.rollback()
             logger.error(f"Failed to update user: {e}")
             raise
-    
+
     # BaseRepository abstract methods implementation
     async def create(self, entity: User) -> User:
         """Create a new user entity"""
@@ -86,15 +97,15 @@ class SQLUserRepository(UserRepository):
         self.db.commit()
         self.db.refresh(entity)
         return entity
-    
+
     async def get_by_id(self, entity_id: UUID) -> Optional[User]:
         """Get user by ID"""
         return await self.get_user_by_id(entity_id)
-    
+
     async def update(self, entity_id: UUID, updates: Dict[str, Any]) -> Optional[User]:
         """Update user by ID"""
         return await self.update_user(entity_id, **updates)
-    
+
     async def delete(self, entity_id: UUID) -> bool:
         """Delete user by ID"""
         try:
@@ -113,11 +124,13 @@ class SQLUserRepository(UserRepository):
 
 class SQLContactRepository(ContactRepository):
     """SQLAlchemy implementation of ContactRepository"""
-    
+
     def __init__(self, db: Session):
         self.db = db
-    
-    async def create_contact(self, user_id: UUID, name: str, phone_number: str) -> Contact:
+
+    async def create_contact(
+        self, user_id: UUID, name: str, phone_number: str
+    ) -> Contact:
         """Create a new contact"""
         try:
             contact = Contact(user_id=user_id, name=name, phone_number=phone_number)
@@ -130,7 +143,7 @@ class SQLContactRepository(ContactRepository):
             self.db.rollback()
             logger.error(f"Failed to create contact: {e}")
             raise
-    
+
     async def get_user_contacts(self, user_id: UUID) -> List[Contact]:
         """Get all contacts for a user"""
         try:
@@ -138,8 +151,10 @@ class SQLContactRepository(ContactRepository):
         except SQLAlchemyError as e:
             logger.error(f"Failed to get user contacts: {e}")
             raise
-    
-    async def find_contact_by_phone(self, user_id: UUID, phone_number: str) -> Optional[Contact]:
+
+    async def find_contact_by_phone(
+        self, user_id: UUID, phone_number: str
+    ) -> Optional[Contact]:
         """Find contact by phone number for a specific user"""
         try:
             contacts = await self.get_user_contacts(user_id)
@@ -150,18 +165,18 @@ class SQLContactRepository(ContactRepository):
         except SQLAlchemyError as e:
             logger.error(f"Failed to find contact by phone: {e}")
             raise
-    
+
     async def update_contact(self, contact_id: UUID, **kwargs) -> Optional[Contact]:
         """Update contact information"""
         try:
             contact = self.db.query(Contact).filter(Contact.id == contact_id).first()
             if not contact:
                 return None
-            
+
             for key, value in kwargs.items():
                 if hasattr(contact, key):
                     setattr(contact, key, value)
-            
+
             self.db.commit()
             self.db.refresh(contact)
             logger.info(f"Updated contact {contact_id}")
@@ -170,7 +185,7 @@ class SQLContactRepository(ContactRepository):
             self.db.rollback()
             logger.error(f"Failed to update contact: {e}")
             raise
-    
+
     # BaseRepository abstract methods implementation
     async def create(self, entity: Contact) -> Contact:
         """Create a new contact entity"""
@@ -178,7 +193,7 @@ class SQLContactRepository(ContactRepository):
         self.db.commit()
         self.db.refresh(entity)
         return entity
-    
+
     async def get_by_id(self, entity_id: UUID) -> Optional[Contact]:
         """Get contact by ID"""
         try:
@@ -186,11 +201,13 @@ class SQLContactRepository(ContactRepository):
         except SQLAlchemyError as e:
             logger.error(f"Failed to get contact by ID: {e}")
             raise
-    
-    async def update(self, entity_id: UUID, updates: Dict[str, Any]) -> Optional[Contact]:
+
+    async def update(
+        self, entity_id: UUID, updates: Dict[str, Any]
+    ) -> Optional[Contact]:
         """Update contact by ID"""
         return await self.update_contact(entity_id, **updates)
-    
+
     async def delete(self, entity_id: UUID) -> bool:
         """Delete contact by ID"""
         try:
@@ -209,10 +226,10 @@ class SQLContactRepository(ContactRepository):
 
 class SQLBillRepository(BillRepository):
     """SQLAlchemy implementation of BillRepository"""
-    
+
     def __init__(self, db: Session):
         self.db = db
-    
+
     async def create_bill(self, user_id: UUID, total_amount: float, **kwargs) -> Bill:
         """Create a new bill"""
         try:
@@ -226,19 +243,21 @@ class SQLBillRepository(BillRepository):
             self.db.rollback()
             logger.error(f"Failed to create bill: {e}")
             raise
-    
+
     async def get_user_bills(self, user_id: UUID, limit: int = 50) -> List[Bill]:
         """Get bills for a user"""
         try:
-            return (self.db.query(Bill)
-                   .filter(Bill.user_id == user_id)
-                   .order_by(desc(Bill.created_at))
-                   .limit(limit)
-                   .all())
+            return (
+                self.db.query(Bill)
+                .filter(Bill.user_id == user_id)
+                .order_by(desc(Bill.created_at))
+                .limit(limit)
+                .all()
+            )
         except SQLAlchemyError as e:
             logger.error(f"Failed to get user bills: {e}")
             raise
-    
+
     async def get_bill_by_id(self, bill_id: UUID) -> Optional[Bill]:
         """Get bill by ID"""
         try:
@@ -246,14 +265,14 @@ class SQLBillRepository(BillRepository):
         except SQLAlchemyError as e:
             logger.error(f"Failed to get bill by ID: {e}")
             raise
-    
-    async def add_participant(self, bill_id: UUID, contact_id: UUID, amount_owed: float) -> BillParticipant:
+
+    async def add_participant(
+        self, bill_id: UUID, contact_id: UUID, amount_owed: float
+    ) -> BillParticipant:
         """Add participant to bill"""
         try:
             participant = BillParticipant(
-                bill_id=bill_id,
-                contact_id=contact_id,
-                amount_owed=amount_owed
+                bill_id=bill_id, contact_id=contact_id, amount_owed=amount_owed
             )
             self.db.add(participant)
             self.db.commit()
@@ -264,24 +283,26 @@ class SQLBillRepository(BillRepository):
             self.db.rollback()
             logger.error(f"Failed to add participant: {e}")
             raise
-    
+
     async def get_bill_participants(self, bill_id: UUID) -> List[BillParticipant]:
         """Get all participants for a bill"""
         try:
-            return (self.db.query(BillParticipant)
-                   .filter(BillParticipant.bill_id == bill_id)
-                   .all())
+            return (
+                self.db.query(BillParticipant)
+                .filter(BillParticipant.bill_id == bill_id)
+                .all()
+            )
         except SQLAlchemyError as e:
             logger.error(f"Failed to get bill participants: {e}")
             raise
-    
+
     async def update_bill_status(self, bill_id: UUID, status: str) -> Optional[Bill]:
         """Update bill status"""
         try:
             bill = await self.get_bill_by_id(bill_id)
             if not bill:
                 return None
-            
+
             bill.status = status
             self.db.commit()
             self.db.refresh(bill)
@@ -291,7 +312,7 @@ class SQLBillRepository(BillRepository):
             self.db.rollback()
             logger.error(f"Failed to update bill status: {e}")
             raise
-    
+
     # BaseRepository abstract methods implementation
     async def create(self, entity: Bill) -> Bill:
         """Create a new bill entity"""
@@ -299,22 +320,22 @@ class SQLBillRepository(BillRepository):
         self.db.commit()
         self.db.refresh(entity)
         return entity
-    
+
     async def get_by_id(self, entity_id: UUID) -> Optional[Bill]:
         """Get bill by ID"""
         return await self.get_bill_by_id(entity_id)
-    
+
     async def update(self, entity_id: UUID, updates: Dict[str, Any]) -> Optional[Bill]:
         """Update bill by ID"""
         try:
             bill = await self.get_bill_by_id(entity_id)
             if not bill:
                 return None
-            
+
             for key, value in updates.items():
                 if hasattr(bill, key):
                     setattr(bill, key, value)
-            
+
             self.db.commit()
             self.db.refresh(bill)
             logger.info(f"Updated bill {entity_id}")
@@ -323,7 +344,7 @@ class SQLBillRepository(BillRepository):
             self.db.rollback()
             logger.error(f"Failed to update bill: {e}")
             raise
-    
+
     async def delete(self, entity_id: UUID) -> bool:
         """Delete bill by ID"""
         try:
@@ -342,16 +363,17 @@ class SQLBillRepository(BillRepository):
 
 class SQLPaymentRepository(PaymentRepository):
     """SQLAlchemy implementation of PaymentRepository"""
-    
+
     def __init__(self, db: Session):
         self.db = db
-    
-    async def create_payment_request(self, participant_id: UUID, upi_link: str) -> PaymentRequest:
+
+    async def create_payment_request(
+        self, participant_id: UUID, upi_link: str
+    ) -> PaymentRequest:
         """Create a payment request"""
         try:
             payment_request = PaymentRequest(
-                bill_participant_id=participant_id,
-                upi_link=upi_link
+                bill_participant_id=participant_id, upi_link=upi_link
             )
             self.db.add(payment_request)
             self.db.commit()
@@ -362,31 +384,39 @@ class SQLPaymentRepository(PaymentRepository):
             self.db.rollback()
             logger.error(f"Failed to create payment request: {e}")
             raise
-    
-    async def get_payment_requests_for_bill(self, bill_id: UUID) -> List[PaymentRequest]:
+
+    async def get_payment_requests_for_bill(
+        self, bill_id: UUID
+    ) -> List[PaymentRequest]:
         """Get all payment requests for a bill"""
         try:
-            return (self.db.query(PaymentRequest)
-                   .join(BillParticipant)
-                   .filter(BillParticipant.bill_id == bill_id)
-                   .all())
+            return (
+                self.db.query(PaymentRequest)
+                .join(BillParticipant)
+                .filter(BillParticipant.bill_id == bill_id)
+                .all()
+            )
         except SQLAlchemyError as e:
             logger.error(f"Failed to get payment requests for bill: {e}")
             raise
-    
-    async def update_payment_status(self, participant_id: UUID, status: str) -> Optional[BillParticipant]:
+
+    async def update_payment_status(
+        self, participant_id: UUID, status: str
+    ) -> Optional[BillParticipant]:
         """Update payment status for participant"""
         try:
-            participant = (self.db.query(BillParticipant)
-                          .filter(BillParticipant.id == participant_id)
-                          .first())
+            participant = (
+                self.db.query(BillParticipant)
+                .filter(BillParticipant.id == participant_id)
+                .first()
+            )
             if not participant:
                 return None
-            
+
             participant.payment_status = status
-            if status == 'confirmed':
+            if status == "confirmed":
                 participant.mark_as_paid()
-            
+
             self.db.commit()
             self.db.refresh(participant)
             logger.info(f"Updated payment status for participant {participant_id}")
@@ -395,38 +425,44 @@ class SQLPaymentRepository(PaymentRepository):
             self.db.rollback()
             logger.error(f"Failed to update payment status: {e}")
             raise
-    
+
     async def get_payment_request(self, request_id: UUID) -> Optional[PaymentRequest]:
         """Get payment request by ID"""
         try:
-            payment_request = (self.db.query(PaymentRequest)
-                             .options(joinedload(PaymentRequest.bill_participant))
-                             .filter(PaymentRequest.id == request_id)
-                             .first())
+            payment_request = (
+                self.db.query(PaymentRequest)
+                .options(joinedload(PaymentRequest.bill_participant))
+                .filter(PaymentRequest.id == request_id)
+                .first()
+            )
             if payment_request:
                 logger.info(f"Retrieved payment request {request_id}")
             return payment_request
         except SQLAlchemyError as e:
             logger.error(f"Failed to get payment request {request_id}: {e}")
             return None
-    
-    async def update_delivery_status(self, request_id: UUID, method: str, success: bool) -> bool:
+
+    async def update_delivery_status(
+        self, request_id: UUID, method: str, success: bool
+    ) -> bool:
         """Update delivery status for payment request"""
         try:
-            payment_request = (self.db.query(PaymentRequest)
-                             .filter(PaymentRequest.id == request_id)
-                             .first())
+            payment_request = (
+                self.db.query(PaymentRequest)
+                .filter(PaymentRequest.id == request_id)
+                .first()
+            )
             if not payment_request:
                 return False
-            
-            if method == 'whatsapp':
+
+            if method == "whatsapp":
                 payment_request.whatsapp_sent = success
-            elif method == 'sms':
+            elif method == "sms":
                 payment_request.sms_sent = success
-            
+
             if success:
                 payment_request.mark_as_sent(method)
-            
+
             self.db.commit()
             self.db.refresh(payment_request)
             logger.info(f"Updated delivery status for {request_id}: {method}={success}")
@@ -435,23 +471,25 @@ class SQLPaymentRepository(PaymentRepository):
             self.db.rollback()
             logger.error(f"Failed to update delivery status: {e}")
             return False
-    
+
     async def confirm_payment(self, request_id: UUID) -> bool:
         """Confirm payment received"""
         try:
-            payment_request = (self.db.query(PaymentRequest)
-                             .filter(PaymentRequest.id == request_id)
-                             .first())
+            payment_request = (
+                self.db.query(PaymentRequest)
+                .filter(PaymentRequest.id == request_id)
+                .first()
+            )
             if not payment_request:
                 return False
-            
+
             payment_request.mark_as_confirmed()
-            
+
             # Also update the bill participant status
             participant = payment_request.bill_participant
             if participant:
                 participant.mark_as_paid()
-            
+
             self.db.commit()
             logger.info(f"Confirmed payment for request {request_id}")
             return True
@@ -459,21 +497,23 @@ class SQLPaymentRepository(PaymentRepository):
             self.db.rollback()
             logger.error(f"Failed to confirm payment: {e}")
             return False
-    
+
     async def reset_delivery_status(self, request_id: UUID) -> bool:
         """Reset delivery status for resending"""
         try:
-            payment_request = (self.db.query(PaymentRequest)
-                             .filter(PaymentRequest.id == request_id)
-                             .first())
+            payment_request = (
+                self.db.query(PaymentRequest)
+                .filter(PaymentRequest.id == request_id)
+                .first()
+            )
             if not payment_request:
                 return False
-            
+
             payment_request.whatsapp_sent = False
             payment_request.sms_sent = False
             payment_request.delivery_attempts = 0
-            payment_request.status = 'pending'
-            
+            payment_request.status = "pending"
+
             self.db.commit()
             logger.info(f"Reset delivery status for payment request {request_id}")
             return True
@@ -481,31 +521,39 @@ class SQLPaymentRepository(PaymentRepository):
             self.db.rollback()
             logger.error(f"Failed to reset delivery status: {e}")
             return False
-    
+
     async def get_payment_requests_by_bill(self, bill_id: UUID) -> List[PaymentRequest]:
         """Get all payment requests for a bill"""
         try:
-            payment_requests = (self.db.query(PaymentRequest)
-                              .join(BillParticipant)
-                              .options(joinedload(PaymentRequest.bill_participant))
-                              .filter(BillParticipant.bill_id == bill_id)
-                              .order_by(PaymentRequest.created_at)
-                              .all())
-            logger.info(f"Retrieved {len(payment_requests)} payment requests for bill {bill_id}")
+            payment_requests = (
+                self.db.query(PaymentRequest)
+                .join(BillParticipant)
+                .options(joinedload(PaymentRequest.bill_participant))
+                .filter(BillParticipant.bill_id == bill_id)
+                .order_by(PaymentRequest.created_at)
+                .all()
+            )
+            logger.info(
+                f"Retrieved {len(payment_requests)} payment requests for bill {bill_id}"
+            )
             return payment_requests
         except SQLAlchemyError as e:
             logger.error(f"Failed to get payment requests for bill {bill_id}: {e}")
             return []
-    
-    async def mark_payment_request_sent(self, request_id: UUID, method: str) -> Optional[PaymentRequest]:
+
+    async def mark_payment_request_sent(
+        self, request_id: UUID, method: str
+    ) -> Optional[PaymentRequest]:
         """Mark payment request as sent"""
         try:
-            payment_request = (self.db.query(PaymentRequest)
-                             .filter(PaymentRequest.id == request_id)
-                             .first())
+            payment_request = (
+                self.db.query(PaymentRequest)
+                .filter(PaymentRequest.id == request_id)
+                .first()
+            )
             if not payment_request:
                 return None
-            
+
             payment_request.mark_as_sent(method)
             self.db.commit()
             self.db.refresh(payment_request)
@@ -515,7 +563,7 @@ class SQLPaymentRepository(PaymentRepository):
             self.db.rollback()
             logger.error(f"Failed to mark payment request as sent: {e}")
             raise
-    
+
     # BaseRepository abstract methods implementation
     async def create(self, entity: PaymentRequest) -> PaymentRequest:
         """Create a new payment request entity"""
@@ -523,26 +571,32 @@ class SQLPaymentRepository(PaymentRepository):
         self.db.commit()
         self.db.refresh(entity)
         return entity
-    
+
     async def get_by_id(self, entity_id: UUID) -> Optional[PaymentRequest]:
         """Get payment request by ID"""
         try:
-            return self.db.query(PaymentRequest).filter(PaymentRequest.id == entity_id).first()
+            return (
+                self.db.query(PaymentRequest)
+                .filter(PaymentRequest.id == entity_id)
+                .first()
+            )
         except SQLAlchemyError as e:
             logger.error(f"Failed to get payment request by ID: {e}")
             raise
-    
-    async def update(self, entity_id: UUID, updates: Dict[str, Any]) -> Optional[PaymentRequest]:
+
+    async def update(
+        self, entity_id: UUID, updates: Dict[str, Any]
+    ) -> Optional[PaymentRequest]:
         """Update payment request by ID"""
         try:
             payment_request = await self.get_by_id(entity_id)
             if not payment_request:
                 return None
-            
+
             for key, value in updates.items():
                 if hasattr(payment_request, key):
                     setattr(payment_request, key, value)
-            
+
             self.db.commit()
             self.db.refresh(payment_request)
             logger.info(f"Updated payment request {entity_id}")
@@ -551,7 +605,7 @@ class SQLPaymentRepository(PaymentRepository):
             self.db.rollback()
             logger.error(f"Failed to update payment request: {e}")
             raise
-    
+
     async def delete(self, entity_id: UUID) -> bool:
         """Delete payment request by ID"""
         try:
@@ -570,19 +624,20 @@ class SQLPaymentRepository(PaymentRepository):
 
 class SQLConversationRepository(ConversationRepository):
     """SQLAlchemy implementation of ConversationRepository"""
-    
+
     def __init__(self, db: Session):
         self.db = db
-    
-    async def create_conversation_state(self, user_id: UUID, session_id: str, 
-                                      current_step: str, context: Dict[str, Any]) -> ConversationState:
+
+    async def create_conversation_state(
+        self, user_id: UUID, session_id: str, current_step: str, context: Dict[str, Any]
+    ) -> ConversationState:
         """Create a new conversation state"""
         try:
             conversation = ConversationState(
                 user_id=user_id,
                 session_id=session_id,
                 current_step=current_step,
-                context=context
+                context=context,
             )
             self.db.add(conversation)
             self.db.commit()
@@ -593,30 +648,41 @@ class SQLConversationRepository(ConversationRepository):
             self.db.rollback()
             logger.error(f"Failed to create conversation state: {e}")
             raise
-    
-    async def get_conversation_state(self, user_id: UUID, session_id: str) -> Optional[ConversationState]:
+
+    async def get_conversation_state(
+        self, user_id: UUID, session_id: str
+    ) -> Optional[ConversationState]:
         """Get conversation state by user and session"""
         try:
-            return (self.db.query(ConversationState)
-                   .filter(and_(ConversationState.user_id == user_id,
-                               ConversationState.session_id == session_id))
-                   .first())
+            return (
+                self.db.query(ConversationState)
+                .filter(
+                    and_(
+                        ConversationState.user_id == user_id,
+                        ConversationState.session_id == session_id,
+                    )
+                )
+                .first()
+            )
         except SQLAlchemyError as e:
             logger.error(f"Failed to get conversation state: {e}")
             raise
-    
-    async def update_conversation_state(self, user_id: UUID, session_id: str, 
-                                      current_step: str, context: Dict[str, Any]) -> Optional[ConversationState]:
+
+    async def update_conversation_state(
+        self, user_id: UUID, session_id: str, current_step: str, context: Dict[str, Any]
+    ) -> Optional[ConversationState]:
         """Update conversation state"""
         try:
             conversation = await self.get_conversation_state(user_id, session_id)
             if not conversation:
-                return await self.create_conversation_state(user_id, session_id, current_step, context)
-            
+                return await self.create_conversation_state(
+                    user_id, session_id, current_step, context
+                )
+
             conversation.current_step = current_step
             conversation.context = context
             conversation.updated_at = func.now()
-            
+
             self.db.commit()
             self.db.refresh(conversation)
             logger.info(f"Updated conversation state for user {user_id}")
@@ -625,14 +691,14 @@ class SQLConversationRepository(ConversationRepository):
             self.db.rollback()
             logger.error(f"Failed to update conversation state: {e}")
             raise
-    
+
     async def delete_conversation_state(self, user_id: UUID, session_id: str) -> bool:
         """Delete conversation state"""
         try:
             conversation = await self.get_conversation_state(user_id, session_id)
             if not conversation:
                 return False
-            
+
             self.db.delete(conversation)
             self.db.commit()
             logger.info(f"Deleted conversation state for user {user_id}")
@@ -641,13 +707,18 @@ class SQLConversationRepository(ConversationRepository):
             self.db.rollback()
             logger.error(f"Failed to delete conversation state: {e}")
             raise
-    
+
     async def cleanup_expired_states(self, hours: int = 24) -> int:
         """Clean up expired conversation states"""
         try:
-            result = (self.db.query(ConversationState)
-                     .filter(ConversationState.updated_at < func.now() - func.interval(f'{hours} hours'))
-                     .delete())
+            result = (
+                self.db.query(ConversationState)
+                .filter(
+                    ConversationState.updated_at
+                    < func.now() - text(f"interval '{hours} hours'")
+                )
+                .delete()
+            )
             self.db.commit()
             logger.info(f"Cleaned up {result} expired conversation states")
             return result
@@ -655,18 +726,22 @@ class SQLConversationRepository(ConversationRepository):
             self.db.rollback()
             logger.error(f"Failed to cleanup expired states: {e}")
             raise
-    
-    async def get_active_conversations(self, hours: int = 24) -> List[ConversationState]:
+
+    async def get_active_conversations(
+        self, hours: int = 24
+    ) -> List[ConversationState]:
         """Get active conversation states within specified hours"""
         try:
             cutoff_time = datetime.now() - timedelta(hours=hours)
-            return (self.db.query(ConversationState)
-                   .filter(ConversationState.updated_at >= cutoff_time)
-                   .all())
+            return (
+                self.db.query(ConversationState)
+                .filter(ConversationState.updated_at >= cutoff_time)
+                .all()
+            )
         except SQLAlchemyError as e:
             logger.error(f"Failed to get active conversations: {e}")
             raise
-    
+
     # BaseRepository abstract methods implementation
     async def create(self, entity: ConversationState) -> ConversationState:
         """Create a new conversation state entity"""
@@ -674,26 +749,32 @@ class SQLConversationRepository(ConversationRepository):
         self.db.commit()
         self.db.refresh(entity)
         return entity
-    
+
     async def get_by_id(self, entity_id: UUID) -> Optional[ConversationState]:
         """Get conversation state by ID"""
         try:
-            return self.db.query(ConversationState).filter(ConversationState.id == entity_id).first()
+            return (
+                self.db.query(ConversationState)
+                .filter(ConversationState.id == entity_id)
+                .first()
+            )
         except SQLAlchemyError as e:
             logger.error(f"Failed to get conversation state by ID: {e}")
             raise
-    
-    async def update(self, entity_id: UUID, updates: Dict[str, Any]) -> Optional[ConversationState]:
+
+    async def update(
+        self, entity_id: UUID, updates: Dict[str, Any]
+    ) -> Optional[ConversationState]:
         """Update conversation state by ID"""
         try:
             conversation = await self.get_by_id(entity_id)
             if not conversation:
                 return None
-            
+
             for key, value in updates.items():
                 if hasattr(conversation, key):
                     setattr(conversation, key, value)
-            
+
             self.db.commit()
             self.db.refresh(conversation)
             logger.info(f"Updated conversation state {entity_id}")
@@ -702,7 +783,7 @@ class SQLConversationRepository(ConversationRepository):
             self.db.rollback()
             logger.error(f"Failed to update conversation state: {e}")
             raise
-    
+
     async def delete(self, entity_id: UUID) -> bool:
         """Delete conversation state by ID"""
         try:
@@ -717,34 +798,42 @@ class SQLConversationRepository(ConversationRepository):
             self.db.rollback()
             logger.error(f"Failed to delete conversation state: {e}")
             raise
-    
+
     # ConversationRepository specific abstract methods
-    async def save_conversation_state(self, state: ConversationState) -> ConversationState:
+    async def save_conversation_state(
+        self, state: ConversationState
+    ) -> ConversationState:
         """Save or update conversation state"""
         try:
             # Check if state already exists
-            existing = await self.get_conversation_state(state.user_id, state.session_id)
+            existing = await self.get_conversation_state(
+                state.user_id, state.session_id
+            )
             if existing:
                 # Update existing state
                 for key, value in state.__dict__.items():
-                    if not key.startswith('_') and hasattr(existing, key):
+                    if not key.startswith("_") and hasattr(existing, key):
                         setattr(existing, key, value)
                 self.db.commit()
                 self.db.refresh(existing)
-                logger.info(f"Updated conversation state for user {state.user_id}, session {state.session_id}")
+                logger.info(
+                    f"Updated conversation state for user {state.user_id}, session {state.session_id}"
+                )
                 return existing
             else:
                 # Create new state
                 self.db.add(state)
                 self.db.commit()
                 self.db.refresh(state)
-                logger.info(f"Created conversation state for user {state.user_id}, session {state.session_id}")
+                logger.info(
+                    f"Created conversation state for user {state.user_id}, session {state.session_id}"
+                )
                 return state
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to save conversation state: {e}")
             raise
-    
+
     async def clear_conversation_state(self, user_id: UUID, session_id: str) -> bool:
         """Clear conversation state"""
         try:
@@ -752,7 +841,9 @@ class SQLConversationRepository(ConversationRepository):
             if state:
                 self.db.delete(state)
                 self.db.commit()
-                logger.info(f"Cleared conversation state for user {user_id}, session {session_id}")
+                logger.info(
+                    f"Cleared conversation state for user {user_id}, session {session_id}"
+                )
                 return True
             return False
         except SQLAlchemyError as e:
@@ -766,7 +857,7 @@ class DatabaseRepository:
     Unified database repository for payment request service
     Combines all repository functionality needed for payment request distribution
     """
-    
+
     def __init__(self, db: Session):
         self.db = db
         self.user_repo = SQLUserRepository(db)
@@ -774,26 +865,30 @@ class DatabaseRepository:
         self.bill_repo = SQLBillRepository(db)
         self.payment_repo = SQLPaymentRepository(db)
         self.conversation_repo = SQLConversationRepository(db)
-    
+
     # Bill-related methods with participants
     async def get_bill_with_participants(self, bill_id: str) -> Optional[Bill]:
         """Get bill with all participants and their contacts"""
         try:
-            bill = (self.db.query(Bill)
-                   .options(
-                       joinedload(Bill.participants).joinedload(BillParticipant.contact),
-                       joinedload(Bill.user)
-                   )
-                   .filter(Bill.id == UUID(bill_id))
-                   .first())
-            
+            bill = (
+                self.db.query(Bill)
+                .options(
+                    joinedload(Bill.participants).joinedload(BillParticipant.contact),
+                    joinedload(Bill.user),
+                )
+                .filter(Bill.id == UUID(bill_id))
+                .first()
+            )
+
             if bill:
-                logger.info(f"Retrieved bill {bill_id} with {len(bill.participants)} participants")
+                logger.info(
+                    f"Retrieved bill {bill_id} with {len(bill.participants)} participants"
+                )
             return bill
         except (SQLAlchemyError, ValueError) as e:
             logger.error(f"Failed to get bill with participants: {e}")
             return None
-    
+
     async def update_bill(self, bill: Bill) -> Bill:
         """Update bill in database"""
         try:
@@ -806,8 +901,10 @@ class DatabaseRepository:
             self.db.rollback()
             logger.error(f"Failed to update bill: {e}")
             raise
-    
-    async def update_bill_participant(self, participant: BillParticipant) -> BillParticipant:
+
+    async def update_bill_participant(
+        self, participant: BillParticipant
+    ) -> BillParticipant:
         """Update bill participant in database"""
         try:
             self.db.merge(participant)
@@ -819,9 +916,11 @@ class DatabaseRepository:
             self.db.rollback()
             logger.error(f"Failed to update bill participant: {e}")
             raise
-    
+
     # Payment request methods
-    async def create_payment_request(self, payment_request: PaymentRequest) -> PaymentRequest:
+    async def create_payment_request(
+        self, payment_request: PaymentRequest
+    ) -> PaymentRequest:
         """Create payment request in database"""
         try:
             self.db.add(payment_request)
@@ -833,19 +932,23 @@ class DatabaseRepository:
             self.db.rollback()
             logger.error(f"Failed to create payment request: {e}")
             raise
-    
+
     async def get_payment_request(self, request_id: str) -> Optional[PaymentRequest]:
         """Get payment request by ID"""
         try:
-            return (self.db.query(PaymentRequest)
-                   .options(joinedload(PaymentRequest.bill_participant))
-                   .filter(PaymentRequest.id == UUID(request_id))
-                   .first())
+            return (
+                self.db.query(PaymentRequest)
+                .options(joinedload(PaymentRequest.bill_participant))
+                .filter(PaymentRequest.id == UUID(request_id))
+                .first()
+            )
         except (SQLAlchemyError, ValueError) as e:
             logger.error(f"Failed to get payment request {request_id}: {e}")
             return None
-    
-    async def update_payment_request(self, payment_request: PaymentRequest) -> PaymentRequest:
+
+    async def update_payment_request(
+        self, payment_request: PaymentRequest
+    ) -> PaymentRequest:
         """Update payment request in database"""
         try:
             self.db.merge(payment_request)
@@ -857,63 +960,82 @@ class DatabaseRepository:
             self.db.rollback()
             logger.error(f"Failed to update payment request: {e}")
             raise
-    
-    async def get_latest_payment_request_for_participant(self, participant_id: str) -> Optional[PaymentRequest]:
+
+    async def get_latest_payment_request_for_participant(
+        self, participant_id: str
+    ) -> Optional[PaymentRequest]:
         """Get the latest payment request for a participant"""
         try:
-            return (self.db.query(PaymentRequest)
-                   .filter(PaymentRequest.bill_participant_id == UUID(participant_id))
-                   .order_by(desc(PaymentRequest.created_at))
-                   .first())
+            return (
+                self.db.query(PaymentRequest)
+                .filter(PaymentRequest.bill_participant_id == UUID(participant_id))
+                .order_by(desc(PaymentRequest.created_at))
+                .first()
+            )
         except (SQLAlchemyError, ValueError) as e:
-            logger.error(f"Failed to get latest payment request for participant {participant_id}: {e}")
+            logger.error(
+                f"Failed to get latest payment request for participant {participant_id}: {e}"
+            )
             return None
-    
-    async def get_participant_by_phone_and_bill(self, phone_number: str, bill_id: str) -> Optional[BillParticipant]:
+
+    async def get_participant_by_phone_and_bill(
+        self, phone_number: str, bill_id: str
+    ) -> Optional[BillParticipant]:
         """Get participant by phone number and bill ID"""
         try:
             # Get all participants for the bill and check phone numbers
-            participants = (self.db.query(BillParticipant)
-                           .options(joinedload(BillParticipant.contact))
-                           .filter(BillParticipant.bill_id == UUID(bill_id))
-                           .all())
-            
+            participants = (
+                self.db.query(BillParticipant)
+                .options(joinedload(BillParticipant.contact))
+                .filter(BillParticipant.bill_id == UUID(bill_id))
+                .all()
+            )
+
             for participant in participants:
-                if participant.contact and participant.contact.phone_number == phone_number:
+                if (
+                    participant.contact
+                    and participant.contact.phone_number == phone_number
+                ):
                     return participant
-            
+
             return None
         except (SQLAlchemyError, ValueError) as e:
             logger.error(f"Failed to get participant by phone and bill: {e}")
             return None
-    
+
     async def get_payment_request_statistics(
-        self,
-        bill_id: Optional[str] = None,
-        since_date: Optional[datetime] = None
+        self, bill_id: Optional[str] = None, since_date: Optional[datetime] = None
     ) -> Dict[str, Any]:
         """Get payment request statistics"""
         try:
             query = self.db.query(PaymentRequest)
-            
+
             if bill_id:
-                query = query.join(BillParticipant).filter(BillParticipant.bill_id == UUID(bill_id))
-            
+                query = query.join(BillParticipant).filter(
+                    BillParticipant.bill_id == UUID(bill_id)
+                )
+
             if since_date:
                 query = query.filter(PaymentRequest.created_at >= since_date)
-            
+
             requests = query.all()
-            
+
             total_requests = len(requests)
-            successful_deliveries = len([r for r in requests if r.whatsapp_sent or r.sms_sent])
+            successful_deliveries = len(
+                [r for r in requests if r.whatsapp_sent or r.sms_sent]
+            )
             failed_deliveries = total_requests - successful_deliveries
             whatsapp_deliveries = len([r for r in requests if r.whatsapp_sent])
             sms_deliveries = len([r for r in requests if r.sms_sent])
-            confirmed_payments = len([r for r in requests if r.status == 'confirmed'])
-            
-            success_rate = successful_deliveries / total_requests if total_requests > 0 else 0.0
-            confirmation_rate = confirmed_payments / total_requests if total_requests > 0 else 0.0
-            
+            confirmed_payments = len([r for r in requests if r.status == "confirmed"])
+
+            success_rate = (
+                successful_deliveries / total_requests if total_requests > 0 else 0.0
+            )
+            confirmation_rate = (
+                confirmed_payments / total_requests if total_requests > 0 else 0.0
+            )
+
             return {
                 "total_requests": total_requests,
                 "successful_deliveries": successful_deliveries,
@@ -922,17 +1044,15 @@ class DatabaseRepository:
                 "sms_deliveries": sms_deliveries,
                 "confirmed_payments": confirmed_payments,
                 "success_rate": success_rate,
-                "confirmation_rate": confirmation_rate
+                "confirmation_rate": confirmation_rate,
             }
-            
+
         except (SQLAlchemyError, ValueError) as e:
             logger.error(f"Failed to get payment request statistics: {e}")
             return {}
-    
+
     async def find_active_participants_by_phone(
-        self,
-        phone_number: str,
-        days_back: int = 30
+        self, phone_number: str, days_back: int = 30
     ) -> List[BillParticipant]:
         """
         Find active bill participants for a phone number
@@ -940,33 +1060,40 @@ class DatabaseRepository:
         """
         try:
             cutoff_date = datetime.now() - timedelta(days=days_back)
-            
+
             # Get all participants from active bills within the timeframe
-            participants = (self.db.query(BillParticipant)
-                           .options(
-                               joinedload(BillParticipant.contact),
-                               joinedload(BillParticipant.bill)
-                           )
-                           .join(Bill)
-                           .filter(
-                               and_(
-                                   Bill.status != 'completed',
-                                   Bill.created_at >= cutoff_date,
-                                   BillParticipant.payment_status != PaymentStatus.CONFIRMED
-                               )
-                           )
-                           .order_by(desc(Bill.created_at))
-                           .all())
-            
+            participants = (
+                self.db.query(BillParticipant)
+                .options(
+                    joinedload(BillParticipant.contact),
+                    joinedload(BillParticipant.bill),
+                )
+                .join(Bill)
+                .filter(
+                    and_(
+                        Bill.status != "completed",
+                        Bill.created_at >= cutoff_date,
+                        BillParticipant.payment_status != PaymentStatus.CONFIRMED,
+                    )
+                )
+                .order_by(desc(Bill.created_at))
+                .all()
+            )
+
             # Filter by phone number (need to decrypt and compare)
             matching_participants = []
             for participant in participants:
-                if participant.contact and participant.contact.phone_number == phone_number:
+                if (
+                    participant.contact
+                    and participant.contact.phone_number == phone_number
+                ):
                     matching_participants.append(participant)
-            
-            logger.info(f"Found {len(matching_participants)} active participants for phone {phone_number}")
+
+            logger.info(
+                f"Found {len(matching_participants)} active participants for phone {phone_number}"
+            )
             return matching_participants
-            
+
         except SQLAlchemyError as e:
             logger.error(f"Failed to find active participants by phone: {e}")
             return []
