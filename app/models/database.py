@@ -1,7 +1,8 @@
 """
 SQLAlchemy database models with encryption support
 """
-from sqlalchemy import Column, String, Decimal, DateTime, Boolean, Text, Integer, ForeignKey, JSON, Index
+from sqlalchemy import Column, String, DateTime, Boolean, Text, Integer, ForeignKey, JSON, Index
+from sqlalchemy.types import Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, validates
 from sqlalchemy.sql import func
@@ -158,7 +159,7 @@ class Bill(Base):
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    total_amount = Column(Decimal(12, 2), nullable=False)  # Increased precision for larger amounts
+    total_amount = Column(Numeric(12, 2), nullable=False)  # Increased precision for larger amounts
     description = Column(Text)
     merchant = Column(String(200))  # Increased length for merchant names
     bill_date = Column(DateTime(timezone=True))
@@ -222,7 +223,7 @@ class BillParticipant(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     bill_id = Column(UUID(as_uuid=True), ForeignKey("bills.id", ondelete="CASCADE"), nullable=False)
     contact_id = Column(UUID(as_uuid=True), ForeignKey("contacts.id", ondelete="CASCADE"), nullable=False)
-    amount_owed = Column(Decimal(12, 2), nullable=False)
+    amount_owed = Column(Numeric(12, 2), nullable=False)
     payment_status = Column(String(20), default='pending', nullable=False)
     paid_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
