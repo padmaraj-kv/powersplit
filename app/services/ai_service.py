@@ -9,9 +9,9 @@ from decimal import Decimal
 from app.models.schemas import BillData, BillItem, ValidationResult, Message
 from app.models.enums import MessageType, ConversationStep
 from app.interfaces.services import AIServiceInterface
-from app.services.sarvam_client import SarvamClient, SarvamError
-from app.services.gemini_client import GeminiVisionClient, GeminiError
-from app.services.litellm_client import LiteLLMClient, LiteLLMError
+from app.clients.sarvam_client import SarvamClient, SarvamError
+from app.clients.gemini_client import GeminiVisionClient, GeminiError
+from app.clients.litellm_client import LiteLLMClient, LiteLLMError
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)

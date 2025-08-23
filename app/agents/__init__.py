@@ -10,5 +10,4 @@ This package provides:
 
 from .base import BaseAgent, AgentContext, AgentResult  # noqa: F401
 from .llm_agent import LlmAgent  # noqa: F401
-from .workflow.sequential import SequentialAgent  # noqa: F401
 from .registry import agent_registry  # noqa: F401

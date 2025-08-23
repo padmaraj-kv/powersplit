@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request, HTTPException, Header, BackgroundTasks
 from fastapi.responses import JSONResponse
 from datetime import datetime
 
-from app.services.siren_client import siren_client, SirenWebhookPayload
+from app.clients.siren_client import siren_client, SirenWebhookPayload
 from app.core.database import get_database
 from app.database.repositories import SQLUserRepository
 from app.models.schemas import Message, Response

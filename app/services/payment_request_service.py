@@ -19,7 +19,7 @@ from decimal import Decimal
 from dataclasses import dataclass
 from enum import Enum
 
-from app.services.siren_client import siren_client, SirenError
+from app.clients.siren_client import siren_client, SirenError
 from app.services.communication_service import communication_service
 from app.services.upi_service import UPIService, UPIApp
 from app.models.database import Bill, BillParticipant, PaymentRequest, Contact, User

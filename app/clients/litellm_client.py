@@ -1,6 +1,7 @@
 """
 LiteLLM client for text processing and intent recognition
 """
+
 import litellm
 import asyncio
 import json
@@ -16,29 +17,30 @@ logger = get_logger(__name__)
 
 class LiteLLMError(Exception):
     """Base exception for LiteLLM errors"""
+
     pass
 
 
 class LiteLLMClient:
     """Client for LiteLLM text processing and intent recognition"""
-    
+
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or settings.gemini_api_key
         # Configure LiteLLM to use Gemini
         litellm.api_key = self.api_key
         self.model = "gemini/gemini-pro"
         self.timeout = 30.0
-        
+
     async def extract_bill_from_text(self, text: str) -> BillData:
         """
         Extract bill information from text using LiteLLM
-        
+
         Args:
             text: User's text message containing bill information
-            
+
         Returns:
             BillData object with extracted information
-            
+
         Raises:
             LiteLLMError: If extraction fails
         """
@@ -72,72 +74,78 @@ class LiteLLMClient:
             - Be conservative with amounts - only extract clear numbers
             - If unclear, ask for clarification by setting total_amount to 0
             """
-            
+
             logger.info(f"Processing text for bill extraction: {text[:100]}...")
-            
+
             response = await asyncio.to_thread(
                 litellm.completion,
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                timeout=self.timeout
+                timeout=self.timeout,
             )
-            
+
             if not response.choices or not response.choices[0].message.content:
                 raise LiteLLMError("No response from LiteLLM API")
-            
+
             response_text = response.choices[0].message.content.strip()
-            
+
             # Parse JSON response
             try:
                 if response_text.startswith("```json"):
                     response_text = response_text[7:-3].strip()
                 elif response_text.startswith("```"):
                     response_text = response_text[3:-3].strip()
-                
+
                 bill_json = json.loads(response_text)
-                
+
                 # Handle case where extraction is unclear
                 if bill_json.get("total_amount", 0) <= 0:
                     raise LiteLLMError("Could not extract clear bill amount from text")
-                
+
                 # Convert to BillData object
-                items = []
+                items: List[BillItem] = []
                 for item_data in bill_json.get("items", []):
-                    items.append(BillItem(
-                        name=item_data["name"],
-                        amount=Decimal(str(item_data["amount"])),
-                        quantity=item_data.get("quantity", 1)
-                    ))
-                
+                    items.append(
+                        BillItem(
+                            name=item_data["name"],
+                            amount=Decimal(str(item_data["amount"])),
+                            quantity=item_data.get("quantity", 1),
+                        )
+                    )
+
                 bill_data = BillData(
                     total_amount=Decimal(str(bill_json["total_amount"])),
                     description=bill_json.get("description", "Bill from text"),
                     items=items,
                     currency=bill_json.get("currency", "INR"),
-                    merchant=bill_json.get("merchant")
+                    merchant=bill_json.get("merchant"),
                 )
-                
-                logger.info(f"Successfully extracted bill from text: ₹{bill_data.total_amount}")
+
+                logger.info(
+                    f"Successfully extracted bill from text: ₹{bill_data.total_amount}"
+                )
                 return bill_data
-                
+
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse LiteLLM response as JSON: {e}")
                 raise LiteLLMError("Failed to parse bill information from text")
-                
+
         except Exception as e:
             if isinstance(e, LiteLLMError):
                 raise
             logger.error(f"LiteLLM API error: {e}")
             raise LiteLLMError(f"Failed to process text: {e}")
-    
-    async def recognize_intent(self, text: str, current_step: ConversationStep) -> Dict[str, Any]:
+
+    async def recognize_intent(
+        self, text: str, current_step: ConversationStep
+    ) -> Dict[str, Any]:
         """
         Recognize user intent based on text and current conversation step
-        
+
         Args:
             text: User's message
             current_step: Current conversation step
-            
+
         Returns:
             Dictionary with intent information
         """
@@ -171,45 +179,66 @@ class LiteLLMClient:
             - "confirm_payment": User is confirming they paid
             - "general_question": General question or unclear intent
             """
-            
+
             response = await asyncio.to_thread(
                 litellm.completion,
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                timeout=self.timeout
+                timeout=self.timeout,
             )
-            
+
             if not response.choices or not response.choices[0].message.content:
-                return {"intent": "general_question", "confidence": 0.0, "entities": {}, "next_action": "ask_clarification"}
-            
+                return {
+                    "intent": "general_question",
+                    "confidence": 0.0,
+                    "entities": {},
+                    "next_action": "ask_clarification",
+                }
+
             response_text = response.choices[0].message.content.strip()
-            
+
             try:
                 if response_text.startswith("```json"):
                     response_text = response_text[7:-3].strip()
                 elif response_text.startswith("```"):
                     response_text = response_text[3:-3].strip()
-                
+
                 intent_data = json.loads(response_text)
-                logger.info(f"Recognized intent: {intent_data.get('intent')} (confidence: {intent_data.get('confidence')})")
+                logger.info(
+                    f"Recognized intent: {intent_data.get('intent')} (confidence: {intent_data.get('confidence')})"
+                )
                 return intent_data
-                
+
             except json.JSONDecodeError:
-                logger.warning(f"Failed to parse intent recognition response: {response_text}")
-                return {"intent": "general_question", "confidence": 0.0, "entities": {}, "next_action": "ask_clarification"}
-                
+                logger.warning(
+                    f"Failed to parse intent recognition response: {response_text}"
+                )
+                return {
+                    "intent": "general_question",
+                    "confidence": 0.0,
+                    "entities": {},
+                    "next_action": "ask_clarification",
+                }
+
         except Exception as e:
             logger.error(f"Intent recognition error: {e}")
-            return {"intent": "general_question", "confidence": 0.0, "entities": {}, "next_action": "ask_clarification"}
-    
-    async def generate_clarifying_questions(self, bill_data: BillData, missing_info: List[str]) -> List[str]:
+            return {
+                "intent": "general_question",
+                "confidence": 0.0,
+                "entities": {},
+                "next_action": "ask_clarification",
+            }
+
+    async def generate_clarifying_questions(
+        self, bill_data: BillData, missing_info: List[str]
+    ) -> List[str]:
         """
         Generate clarifying questions for incomplete bill data
-        
+
         Args:
             bill_data: Partially extracted bill data
             missing_info: List of missing information fields
-            
+
         Returns:
             List of clarifying questions
         """
@@ -230,64 +259,66 @@ class LiteLLMClient:
             
             Example: ["What was the total amount of the bill?", "Which restaurant or store was this from?"]
             """
-            
+
             response = await asyncio.to_thread(
                 litellm.completion,
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                timeout=self.timeout
+                timeout=self.timeout,
             )
-            
+
             if not response.choices or not response.choices[0].message.content:
                 return ["Could you provide more details about the bill?"]
-            
+
             response_text = response.choices[0].message.content.strip()
-            
+
             try:
                 if response_text.startswith("```json"):
                     response_text = response_text[7:-3].strip()
                 elif response_text.startswith("```"):
                     response_text = response_text[3:-3].strip()
-                
+
                 questions = json.loads(response_text)
                 if isinstance(questions, list):
                     return questions
                 else:
                     return ["Could you provide more details about the bill?"]
-                    
+
             except json.JSONDecodeError:
                 return ["Could you provide more details about the bill?"]
-                
+
         except Exception as e:
             logger.error(f"Failed to generate clarifying questions: {e}")
             return ["Could you provide more details about the bill?"]
-    
+
     async def validate_bill_data(self, bill_data: BillData) -> ValidationResult:
         """
         Validate extracted bill data for completeness and accuracy
-        
+
         Args:
             bill_data: Bill data to validate
-            
+
         Returns:
             ValidationResult with validation status and issues
         """
-        errors = []
-        warnings = []
-        
+        errors: List[str] = []
+        warnings: List[str] = []
+
         # Basic validation
         if bill_data.total_amount <= 0:
             errors.append("Total amount must be greater than zero")
-        
+
         if not bill_data.description or bill_data.description.strip() == "":
             warnings.append("Bill description is empty")
-        
+
         # Validate items sum matches total (if items are provided)
         if bill_data.items:
             items_total = sum(item.amount * item.quantity for item in bill_data.items)
-            if abs(items_total - bill_data.total_amount) > Decimal('0.01'):
-                warnings.append(f"Items total (₹{items_total}) doesn't match bill total (₹{bill_data.total_amount})")
-        
+            if abs(items_total - bill_data.total_amount) > Decimal("0.01"):
+                warnings.append(
+                    f"Items total (₹{items_total}) doesn't match bill total (₹{bill_data.total_amount})"
+                )
+
         # Use LiteLLM for semantic validation
         try:
             prompt = f"""
@@ -309,44 +340,40 @@ class LiteLLMClient:
             - Inconsistent item pricing
             - Missing essential information
             """
-            
+
             response = await asyncio.to_thread(
                 litellm.completion,
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                timeout=self.timeout
+                timeout=self.timeout,
             )
-            
+
             if response.choices and response.choices[0].message.content:
                 response_text = response.choices[0].message.content.strip()
-                
+
                 try:
                     if response_text.startswith("```json"):
                         response_text = response_text[7:-3].strip()
                     elif response_text.startswith("```"):
                         response_text = response_text[3:-3].strip()
-                    
+
                     validation_data = json.loads(response_text)
                     warnings.extend(validation_data.get("issues", []))
-                    
+
                 except json.JSONDecodeError:
                     pass
-                    
+
         except Exception as e:
             logger.warning(f"Semantic validation failed: {e}")
-        
+
         is_valid = len(errors) == 0
-        
-        return ValidationResult(
-            is_valid=is_valid,
-            errors=errors,
-            warnings=warnings
-        )
-    
+
+        return ValidationResult(is_valid=is_valid, errors=errors, warnings=warnings)
+
     async def health_check(self) -> bool:
         """
         Check if LiteLLM/Gemini API is available
-        
+
         Returns:
             True if service is healthy, False otherwise
         """
@@ -355,10 +382,14 @@ class LiteLLMClient:
                 litellm.completion,
                 model=self.model,
                 messages=[{"role": "user", "content": "Hello"}],
-                timeout=5.0
+                timeout=5.0,
             )
             return bool(response.choices and response.choices[0].message.content)
-            
+
         except Exception as e:
             logger.warning(f"LiteLLM health check failed: {e}")
             return False
+
+
+from app.services.litellm_client import *  # re-export during migration
+from app.services.litellm_client import LiteLLMClient  # noqa: F401

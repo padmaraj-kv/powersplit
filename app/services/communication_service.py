@@ -5,8 +5,8 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 from app.interfaces.services import CommunicationServiceInterface
-from app.services.siren_client import siren_client, SirenError, SirenWhatsAppError, SirenSMSError
-from app.models.enums import DeliveryMethod, ErrorType
+from app.clients.siren_client import siren_client, SirenWhatsAppError, SirenSMSError
+from app.models.enums import DeliveryMethod
 from app.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -252,7 +252,7 @@ class CommunicationService(CommunicationServiceInterface):
     async def validate_phone_number(self, phone_number: str) -> bool:
         """Validate phone number format for Siren compatibility"""
         try:
-            formatted = self.client._format_phone_number(phone_number)
+            formatted = self.client._format_phone_number(phone_number)  # type: ignore[attr-defined]
             
             # Basic validation - should start with + and have reasonable length
             if not formatted.startswith('+'):

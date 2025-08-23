@@ -15,6 +15,7 @@ from app.models.schemas import (
     ValidationResult,
 )
 from app.services.state_machine import BaseStepHandler, StepResult
+from app.agents import agent_registry, AgentContext
 from app.services.bill_extractor import BillExtractor, BillExtractionError
 from app.services.payment_confirmation_service import PaymentConfirmationService
 
@@ -143,9 +144,28 @@ class BillExtractionHandler(BaseStepHandler):
             if state.context.get("awaiting_clarification"):
                 return await self._handle_clarification_response(state, message)
 
-            # Extract bill data using BillExtractor
+            # Extract bill data using ADK-style agent for text, fallback to extractor
             try:
-                bill_data = await self.bill_extractor.extract_bill_data(message)
+                if message.message_type == MessageType.TEXT:
+                    try:
+                        agent = agent_registry.create("llm")
+                        context = AgentContext(
+                            session_id=message.id,
+                            user_id=message.user_id,
+                            metadata=message.metadata,
+                        )
+                        result = await agent.run(message.content, context)
+                        bill_dict = (result.metadata or {}).get("bill_data")
+                        if bill_dict:
+                            bill_data = BillData(**bill_dict)
+                        else:
+                            bill_data = await self.bill_extractor.extract_bill_data(
+                                message
+                            )
+                    except Exception:
+                        bill_data = await self.bill_extractor.extract_bill_data(message)
+                else:
+                    bill_data = await self.bill_extractor.extract_bill_data(message)
 
                 # Validate the extracted data
                 validation_result = await self.bill_extractor.validate_bill_data(
