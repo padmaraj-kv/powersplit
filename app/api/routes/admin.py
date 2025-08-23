@@ -155,7 +155,7 @@ async def get_detailed_error_report(hours_back: int = Query(default=24, le=168))
 
 @router.post("/maintenance/cleanup")
 async def run_maintenance_cleanup(
-    cleanup_type: str = Query(..., regex="^(conversations|errors|all)$"),
+            cleanup_type: str = Query(..., pattern="^(conversations|errors|all)$"),
     hours_back: int = Query(default=24, le=168),
 ):
     """Run maintenance cleanup tasks"""
@@ -219,7 +219,7 @@ async def get_configuration_status():
 
 @router.post("/services/restart")
 async def restart_services(
-    service: str = Query(..., regex="^(conversation_factory|all)$")
+            service: str = Query(..., pattern="^(conversation_factory|all)$")
 ):
     """Restart specific services"""
     try:

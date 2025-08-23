@@ -3,6 +3,7 @@ Service interfaces for business logic layer
 """
 from abc import ABC, abstractmethod
 from typing import List, Optional, Dict, Any, Tuple
+from decimal import Decimal
 from app.models.schemas import (
     Message, Response, BillData, Participant, ConversationState,
     PaymentRequest, BillSummary, ValidationResult, BillDetails,

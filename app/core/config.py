@@ -178,10 +178,12 @@ class Settings(BaseSettings):
             "access_log": self.debug,
         }
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
-        validate_assignment = True
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": False,
+        "validate_assignment": True,
+        "extra": "allow"
+    }
 
 
 # Global settings instance

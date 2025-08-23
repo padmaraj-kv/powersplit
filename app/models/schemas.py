@@ -37,7 +37,7 @@ class BillData(BaseModel):
 class Participant(BaseModel):
     """Bill participant information"""
     name: str
-    phone_number: str = Field(..., regex=r'^\+?[1-9]\d{1,14}$')
+    phone_number: str = Field(..., pattern=r'^\+?[1-9]\d{1,14}$')
     amount_owed: Decimal = Field(..., gt=0)
     payment_status: PaymentStatus = PaymentStatus.PENDING
     contact_id: Optional[str] = None
@@ -164,6 +164,7 @@ class ErrorResponse(BaseModel):
     message: str
     details: Optional[Dict[str, Any]] = None
     timestamp: datetime = Field(default_factory=datetime.now)
-# 
-Forward reference resolution
+
+
+# Forward reference resolution
 BillDetails.model_rebuild()

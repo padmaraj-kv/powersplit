@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from app.models.enums import ConversationStep, MessageType
 from app.models.schemas import Message, Response, ConversationState, BillData, Participant, ValidationResult
-from app.services.state_machine import BaseStepHandler, StepResult
+from app.services.base_handlers import BaseStepHandler, StepResult
 from app.services.bill_extractor import BillExtractor, BillExtractionError
 from app.services.payment_confirmation_service import PaymentConfirmationService
 
@@ -18,6 +18,9 @@ class InitialStepHandler(BaseStepHandler):
     Handler for initial conversation step
     Welcomes users and processes first bill input
     """
+    
+    def __init__(self, ai_service=None):
+        super().__init__(ai_service)
     
     async def handle_message(self, state: ConversationState, message: Message) -> StepResult:
         """Handle initial message from user"""
@@ -100,7 +103,8 @@ class BillExtractionHandler(BaseStepHandler):
     Implements requirements 1.1, 1.2, 1.3, 1.4, 1.5
     """
     
-    def __init__(self, bill_extractor: Optional[BillExtractor] = None):
+    def __init__(self, ai_service=None, bill_extractor: Optional[BillExtractor] = None):
+        super().__init__(ai_service)
         self.bill_extractor = bill_extractor or BillExtractor()
     
     async def handle_message(self, state: ConversationState, message: Message) -> StepResult:
@@ -360,7 +364,8 @@ class BillConfirmationHandler(BaseStepHandler):
     Implements requirement 1.5
     """
     
-    def __init__(self, bill_extractor: Optional[BillExtractor] = None):
+    def __init__(self, ai_service=None, bill_extractor: Optional[BillExtractor] = None):
+        super().__init__(ai_service)
         self.bill_extractor = bill_extractor or BillExtractor()
     
     async def handle_message(self, state: ConversationState, message: Message) -> StepResult:
@@ -971,6 +976,9 @@ class SplitConfirmationHandler(BaseStepHandler):
 class PaymentRequestHandler(BaseStepHandler):
     """Handler for sending payment requests"""
     
+    def __init__(self, ai_service=None):
+        super().__init__(ai_service)
+    
     async def handle_message(self, state: ConversationState, message: Message) -> StepResult:
         """Handle payment request sending"""
         # Placeholder implementation
@@ -1003,6 +1011,9 @@ class PaymentTrackingHandler(BaseStepHandler):
 class CompletionHandler(BaseStepHandler):
     """Handler for completed bill splitting"""
     
+    def __init__(self, ai_service=None):
+        super().__init__(ai_service)
+    
     async def handle_message(self, state: ConversationState, message: Message) -> StepResult:
         """Handle completion step"""
         return StepResult(
@@ -1014,8 +1025,8 @@ class CompletionHandler(BaseStepHandler):
             context_updates={"completed": True}
         )
 
-cla
-ss PaymentTrackingHandler(BaseStepHandler):
+
+class PaymentTrackingHandler(BaseStepHandler):
     """
     Handler for tracking payment confirmations
     Implements requirements 5.1, 5.2, 5.3, 5.5
@@ -1165,6 +1176,9 @@ class CompletionHandler(BaseStepHandler):
     Handler for completed bills
     Provides final confirmation and cleanup
     """
+    
+    def __init__(self, ai_service=None):
+        super().__init__(ai_service)
     
     async def handle_message(self, state: ConversationState, message: Message) -> StepResult:
         """Handle messages after bill completion"""
