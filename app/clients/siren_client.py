@@ -339,9 +339,3 @@ class SirenClient:
 
 # Singleton instance for dependency injection
 siren_client = SirenClient()
-
-"""
-Siren AI Toolkit client wrapper for WhatsApp and SMS messaging
-"""
-from app.services.siren_client import *  # re-export during migration
-from app.services.siren_client import siren_client  # noqa: F401

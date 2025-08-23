@@ -10,7 +10,6 @@ from app.models.schemas import BillData, BillItem, ValidationResult, Message
 from app.models.enums import MessageType, ConversationStep
 from app.interfaces.services import AIServiceInterface
 from app.clients.sarvam_client import SarvamClient, SarvamError
-from app.clients.gemini_client import GeminiVisionClient, GeminiError
 from app.clients.litellm_client import LiteLLMClient, LiteLLMError
 from app.utils.logging import get_logger
 
@@ -31,7 +30,6 @@ class AIService(AIServiceInterface):
 
     def __init__(self):
         self.sarvam_client = SarvamClient()
-        self.gemini_client = GeminiVisionClient()
         self.litellm_client = LiteLLMClient()
         self.max_retries = 3
         self.retry_delay = 1.0
@@ -127,7 +125,7 @@ class AIService(AIServiceInterface):
 
         # Step 1: Validate image quality
         try:
-            validation = await self.gemini_client.validate_image_quality(image_data)
+            validation = await self.litellm_client.validate_image_quality(image_data)
             if not validation["is_valid"]:
                 issues = ", ".join(validation["issues"])
                 suggestions = " ".join(validation["suggestions"])
@@ -137,16 +135,16 @@ class AIService(AIServiceInterface):
             logger.warning(f"Image validation failed: {e}")
             # Continue with extraction even if validation fails
 
-        # Step 2: Extract bill data using Gemini Vision
+        # Step 2: Extract bill data using LiteLLM Vision
         try:
             bill_data = await self._retry_operation(
-                self.gemini_client.extract_bill_from_image, image_data
+                self.litellm_client.extract_bill_from_image, image_data
             )
 
             # Step 3: Enhance description if possible
             try:
                 enhanced_description = (
-                    await self.gemini_client.enhance_bill_description(bill_data)
+                    await self.litellm_client.enhance_bill_description(bill_data)
                 )
                 bill_data.description = enhanced_description
             except Exception as e:
@@ -155,8 +153,8 @@ class AIService(AIServiceInterface):
             logger.info("Successfully extracted bill data from image")
             return bill_data
 
-        except GeminiError as e:
-            logger.error(f"Gemini Vision extraction failed: {e}")
+        except LiteLLMError as e:
+            logger.error(f"LiteLLM Vision extraction failed: {e}")
             raise AIServiceError(f"Failed to process bill image: {e}")
 
         except Exception as e:
@@ -271,7 +269,6 @@ class AIService(AIServiceInterface):
         # Check each service concurrently
         tasks = [
             ("sarvam", self.sarvam_client.health_check()),
-            ("gemini", self.gemini_client.health_check()),
             ("litellm", self.litellm_client.health_check()),
         ]
 

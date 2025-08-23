@@ -5,8 +5,10 @@ LiteLLM client for text processing and intent recognition
 import litellm
 import asyncio
 import json
+import base64
 from typing import Optional, Dict, Any, List
 from decimal import Decimal
+from io import BytesIO
 from app.core.config import settings
 from app.models.schemas import BillData, BillItem, ValidationResult
 from app.models.enums import ConversationStep
@@ -29,6 +31,7 @@ class LiteLLMClient:
         # Configure LiteLLM to use Gemini
         litellm.api_key = self.api_key
         self.model = "gemini/gemini-pro"
+        self.vision_model = "gemini/gemini-pro-vision"
         self.timeout = 30.0
 
     async def extract_bill_from_text(self, text: str) -> BillData:
@@ -136,6 +139,118 @@ class LiteLLMClient:
             logger.error(f"LiteLLM API error: {e}")
             raise LiteLLMError(f"Failed to process text: {e}")
 
+    async def extract_bill_from_image(self, image_data: bytes) -> BillData:
+        """
+        Extract bill information from an image using LiteLLM with Gemini Vision
+
+        Args:
+            image_data: Raw image bytes
+
+        Returns:
+            BillData object with extracted information
+
+        Raises:
+            LiteLLMError: If extraction fails
+        """
+        try:
+            # Encode image to base64
+            image_base64 = base64.b64encode(image_data).decode("utf-8")
+
+            prompt = """
+            Extract bill information from this image and return it in JSON format.
+            
+            Return JSON in this exact format:
+            {
+                "total_amount": <total amount as number>,
+                "description": "<brief description>",
+                "merchant": "<merchant name if mentioned>",
+                "items": [
+                    {
+                        "name": "<item name>",
+                        "amount": <amount as number>,
+                        "quantity": <quantity as number>
+                    }
+                ],
+                "currency": "INR"
+            }
+            
+            Rules:
+            - If total amount is not mentioned, sum up individual items
+            - If no items are mentioned, create items based on context
+            - Use "INR" as currency for Indian context
+            - Set quantity to 1 if not specified
+            - If merchant is not mentioned, use null
+            - Be conservative with amounts - only extract clear numbers
+            """
+
+            logger.info("Processing image for bill extraction")
+
+            response = await asyncio.to_thread(
+                litellm.completion,
+                model=self.vision_model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_base64}"
+                                },
+                            },
+                        ],
+                    }
+                ],
+                timeout=self.timeout,
+            )
+
+            if not response.choices or not response.choices[0].message.content:
+                raise LiteLLMError("No response from LiteLLM API for image processing")
+
+            response_text = response.choices[0].message.content.strip()
+
+            # Parse JSON response
+            try:
+                if response_text.startswith("```json"):
+                    response_text = response_text[7:-3].strip()
+                elif response_text.startswith("```"):
+                    response_text = response_text[3:-3].strip()
+
+                bill_json = json.loads(response_text)
+
+                # Convert to BillData
+                items = []
+                for item_data in bill_json.get("items", []):
+                    items.append(
+                        BillItem(
+                            name=item_data.get("name", "Unknown item"),
+                            amount=Decimal(str(item_data.get("amount", 0))),
+                            quantity=item_data.get("quantity", 1),
+                        )
+                    )
+
+                bill_data = BillData(
+                    total_amount=Decimal(str(bill_json.get("total_amount", 0))),
+                    description=bill_json.get("description", "Bill from image"),
+                    items=items,
+                    currency=bill_json.get("currency", "INR"),
+                    merchant=bill_json.get("merchant"),
+                )
+
+                logger.info(
+                    f"Successfully extracted bill data from image: ₹{bill_data.total_amount}"
+                )
+                return bill_data
+
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON from LiteLLM response: {e}")
+                raise LiteLLMError(f"Invalid JSON response: {e}")
+
+        except Exception as e:
+            logger.error(f"Error extracting bill data from image: {e}")
+            raise LiteLLMError(f"Image extraction failed: {str(e)}")
+
     async def recognize_intent(
         self, text: str, current_step: ConversationStep
     ) -> Dict[str, Any]:
@@ -229,6 +344,82 @@ class LiteLLMClient:
                 "next_action": "ask_clarification",
             }
 
+    async def validate_image_quality(self, image_data: bytes) -> Dict[str, Any]:
+        """
+        Validate image quality for bill extraction
+
+        Args:
+            image_data: Raw image bytes
+
+        Returns:
+            Dictionary with validation results
+        """
+        try:
+            # Encode image to base64
+            image_base64 = base64.b64encode(image_data).decode("utf-8")
+
+            prompt = """
+            Analyze this image of a bill/receipt and check for quality issues.
+            Respond with a JSON object containing:
+            1. "is_valid": boolean (true if image is usable for bill extraction)
+            2. "issues": array of strings (list of quality issues, empty if none)
+            3. "suggestions": array of strings (suggestions to improve image quality)
+            
+            Common issues to check for:
+            - Blurriness
+            - Poor lighting
+            - Glare or reflections
+            - Incomplete capture (missing parts)
+            - Skewed/tilted perspective
+            - Low resolution
+            - Obstructions covering text
+            """
+
+            response = await asyncio.to_thread(
+                litellm.completion,
+                model=self.vision_model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{image_base64}"
+                                },
+                            },
+                        ],
+                    }
+                ],
+                timeout=self.timeout,
+            )
+
+            if not response.choices or not response.choices[0].message.content:
+                return {"is_valid": True, "issues": [], "suggestions": []}
+
+            response_text = response.choices[0].message.content.strip()
+
+            # Parse JSON response
+            try:
+                if response_text.startswith("```json"):
+                    response_text = response_text[7:-3].strip()
+                elif response_text.startswith("```"):
+                    response_text = response_text[3:-3].strip()
+
+                validation_result = json.loads(response_text)
+                return {
+                    "is_valid": validation_result.get("is_valid", True),
+                    "issues": validation_result.get("issues", []),
+                    "suggestions": validation_result.get("suggestions", []),
+                }
+            except json.JSONDecodeError:
+                return {"is_valid": True, "issues": [], "suggestions": []}
+
+        except Exception as e:
+            logger.warning(f"Image quality validation failed: {e}")
+            return {"is_valid": True, "issues": [], "suggestions": []}
+
     async def generate_clarifying_questions(
         self, bill_data: BillData, missing_info: List[str]
     ) -> List[str]:
@@ -290,6 +481,49 @@ class LiteLLMClient:
         except Exception as e:
             logger.error(f"Failed to generate clarifying questions: {e}")
             return ["Could you provide more details about the bill?"]
+
+    async def enhance_bill_description(self, bill_data: BillData) -> str:
+        """
+        Enhance bill description with additional context
+
+        Args:
+            bill_data: Extracted bill data
+
+        Returns:
+            Enhanced description
+        """
+        try:
+            # Create a prompt with the bill data
+            bill_json = bill_data.dict()
+            prompt = f"""
+            Create a concise but informative description for this bill:
+            
+            Bill Data: {json.dumps(bill_json, default=str)}
+            
+            The description should:
+            1. Mention the merchant name if available
+            2. Include the total amount
+            3. Summarize what was purchased
+            4. Be 1-2 sentences maximum
+            5. Be natural and conversational
+            """
+
+            response = await asyncio.to_thread(
+                litellm.completion,
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                timeout=self.timeout,
+            )
+
+            if not response.choices or not response.choices[0].message.content:
+                return bill_data.description
+
+            enhanced_description = response.choices[0].message.content.strip()
+            return enhanced_description
+
+        except Exception as e:
+            logger.warning(f"Failed to enhance bill description: {e}")
+            return bill_data.description
 
     async def validate_bill_data(self, bill_data: BillData) -> ValidationResult:
         """
@@ -389,7 +623,3 @@ class LiteLLMClient:
         except Exception as e:
             logger.warning(f"LiteLLM health check failed: {e}")
             return False
-
-
-from app.services.litellm_client import *  # re-export during migration
-from app.services.litellm_client import LiteLLMClient  # noqa: F401
