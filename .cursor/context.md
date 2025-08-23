@@ -3,7 +3,7 @@
 - Name: Bill Splitting Agent (FastAPI)
 - Purpose: WhatsApp-based bill splitting using AI for OCR/voice/text and UPI flows
 - Key Areas:
-  - API: `app/api/routes` (`webhooks.py`, `bills.py`, `admin.py`)
+  - API: `app/api/routes/webhooks.py` (single-ingress Siren/Twilio)
   - Core: `app/core/config.py`, `app/core/database.py`
   - Services: AI clients (`sarvam_client.py`, `gemini_client.py`, `litellm_client.py`), payments, conversations
   - Models: `app/models/`
@@ -12,8 +12,8 @@
 ## Runtime
 
 - Entry: `app/main.py` (lifespan orchestrates init of DB, services, webhooks)
-- Health: `/health`, metrics and admin endpoints under `/api/v1/admin`
-- Webhooks: `/api/v1/webhooks/siren/*`
+- Health: `/health`
+- Webhooks: `/api/v1/webhooks/siren/*`, `/api/v1/webhooks/twilio/whatsapp`
 
 ## Configuration
 
@@ -23,6 +23,6 @@
 
 ## Notes
 
-- Remove legacy `app/api/routes/webhook.py` in favor of `webhooks.py`
+- Webhook-only API: bills/admin routers removed; all flows driven from webhook
 - Keep LiteLLM as a convenience client for model switching
 - Supabase SDK not needed beyond DB connection; prefer direct Postgres URL

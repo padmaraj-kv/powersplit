@@ -12,8 +12,7 @@ app/
 │   ├── __init__.py
 │   └── routes/
 │       ├── __init__.py
-│       ├── webhooks.py     # Siren webhook handlers (active)
-│       └── admin.py        # Admin utilities (no auth for now)
+│       └── webhooks.py     # Webhook handlers (Siren/Twilio inbound only)
 ├── core/                   # Core application components
 │   ├── __init__.py
 │   ├── config.py          # Application configuration
@@ -83,19 +82,20 @@ app/
    python -m app.main
    ```
 
-## API Endpoints
+## API Surface (webhook-only)
 
-- `GET /health` - Health check endpoint
 - `POST /api/v1/webhooks/siren/message` - Siren message webhook
 - `POST /api/v1/webhooks/siren/delivery-status` - Siren delivery status webhook
+- `POST /api/v1/webhooks/twilio/whatsapp` - Twilio WhatsApp inbound (normalized)
+- `GET /health` - Basic health
 
 ## Environment Variables
 
 See `.env.example` for required configuration variables including:
 
-- **DATABASE_URL** (PostgreSQL DSN; Supabase used only as DB)
-- **SARVAM_API_KEY**, **GEMINI_API_KEY**
-- **SIREN_API_KEY**, **SIREN_WEBHOOK_SECRET**
+- **DATABASE_URL** (PostgreSQL DSN)
+- **SARVAM_API_KEY**, **GEMINI_API_KEY** (AI)
+- **SIREN_API_KEY**, **SIREN_WEBHOOK_SECRET** (Messaging)
 - **ENCRYPTION_KEY** (>=32 chars)
 
 ## Architecture
@@ -108,12 +108,7 @@ The application follows a clean architecture pattern with:
 - **Model Layer**: Data structures and validation
 - **Interface Layer**: Abstract contracts for services and repositories
 
-## Next Steps
+## Design Notes
 
-This foundational setup provides the core structure for implementing the bill splitting agent. The next tasks will involve:
-
-1. Database models and migrations
-2. Siren integration layer
-3. Conversation state management
-4. AI service integrations
-5. Bill processing logic
+- Single-ingress architecture: all user interactions come via WhatsApp and are processed through a single webhook pipeline.
+- No REST UI: bill/admin endpoints were removed as the assistant operates purely via messaging.
