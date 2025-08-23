@@ -15,9 +15,9 @@ from app.models.schemas import (
     ValidationResult,
 )
 from app.services.state_machine import BaseStepHandler, StepResult
-from app.agents import agent_registry, AgentContext
 from app.services.bill_extractor import BillExtractor, BillExtractionError
 from app.services.payment_confirmation_service import PaymentConfirmationService
+from app.agents.adk_agent import adk_agent
 
 logger = logging.getLogger(__name__)
 
@@ -144,27 +144,18 @@ class BillExtractionHandler(BaseStepHandler):
             if state.context.get("awaiting_clarification"):
                 return await self._handle_clarification_response(state, message)
 
-            # Extract bill data using ADK-style agent for text, fallback to extractor
+            # Extract bill data using proper Google ADK agent for text, fallback to extractor for other types
             try:
                 if message.message_type == MessageType.TEXT:
                     try:
-                        agent = agent_registry.create("llm")
-                        context = AgentContext(
-                            session_id=message.id,
-                            user_id=message.user_id,
-                            metadata=message.metadata,
-                        )
-                        result = await agent.run(message.content, context)
-                        bill_dict = (result.metadata or {}).get("bill_data")
-                        if bill_dict:
-                            bill_data = BillData(**bill_dict)
-                        else:
-                            bill_data = await self.bill_extractor.extract_bill_data(
-                                message
-                            )
-                    except Exception:
+                        # Use the Google ADK agent for text extraction
+                        bill_data = await adk_agent.process_text(message.content)
+                    except Exception as e:
+                        logger.warning(f"ADK agent extraction failed: {e}")
+                        # Fallback to traditional extractor
                         bill_data = await self.bill_extractor.extract_bill_data(message)
                 else:
+                    # Use traditional extractor for non-text inputs (images, voice)
                     bill_data = await self.bill_extractor.extract_bill_data(message)
 
                 # Validate the extracted data
@@ -185,6 +176,7 @@ class BillExtractionHandler(BaseStepHandler):
                             "bill_data": bill_data.dict(),
                             "extraction_successful": True,
                             "validation_warnings": validation_result.warnings,
+                            "used_adk_agent": message.message_type == MessageType.TEXT,
                         },
                     )
                 else:
