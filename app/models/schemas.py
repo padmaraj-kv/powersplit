@@ -1,18 +1,24 @@
 """
 Pydantic schemas for data validation and serialization
 """
+
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Dict, Any
 from decimal import Decimal
 from datetime import datetime
 from app.models.enums import (
-    ConversationStep, PaymentStatus, MessageType, 
-    DeliveryMethod, BillStatus, ErrorType
+    ConversationStep,
+    PaymentStatus,
+    MessageType,
+    DeliveryMethod,
+    BillStatus,
+    ErrorType,
 )
 
 
 class BillItem(BaseModel):
     """Individual item in a bill"""
+
     name: str
     amount: Decimal = Field(..., gt=0)
     quantity: int = Field(default=1, gt=0)
@@ -20,24 +26,26 @@ class BillItem(BaseModel):
 
 class BillData(BaseModel):
     """Core bill information extracted from user input"""
+
     total_amount: Decimal = Field(..., gt=0)
     description: str
     items: List[BillItem] = Field(default_factory=list)
     currency: str = Field(default="INR")
     date: Optional[datetime] = None
     merchant: Optional[str] = None
-    
-    @validator('total_amount')
+
+    @validator("total_amount")
     def validate_amount(cls, v):
         if v <= 0:
-            raise ValueError('Total amount must be positive')
+            raise ValueError("Total amount must be positive")
         return v
 
 
 class Participant(BaseModel):
     """Bill participant information"""
+
     name: str
-    phone_number: str = Field(..., regex=r'^\+?[1-9]\d{1,14}$')
+    phone_number: str = Field(..., pattern=r"^\+?[1-9]\d{1,14}$")
     amount_owed: Decimal = Field(..., gt=0)
     payment_status: PaymentStatus = PaymentStatus.PENDING
     contact_id: Optional[str] = None
@@ -45,6 +53,7 @@ class Participant(BaseModel):
 
 class ConversationState(BaseModel):
     """Conversation state for maintaining context"""
+
     user_id: str
     session_id: str
     current_step: ConversationStep
@@ -59,6 +68,7 @@ class ConversationState(BaseModel):
 
 class Message(BaseModel):
     """Incoming message from Siren webhook"""
+
     id: str
     user_id: str
     content: str
@@ -69,6 +79,7 @@ class Message(BaseModel):
 
 class Response(BaseModel):
     """Response to send back to user"""
+
     content: str
     message_type: MessageType = MessageType.TEXT
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -76,6 +87,7 @@ class Response(BaseModel):
 
 class PaymentRequest(BaseModel):
     """Payment request information"""
+
     id: str
     bill_id: str
     participant_id: str
@@ -89,6 +101,7 @@ class PaymentRequest(BaseModel):
 
 class BillSummary(BaseModel):
     """Summary information for bill queries"""
+
     id: str
     description: str
     total_amount: Decimal
@@ -102,6 +115,7 @@ class BillSummary(BaseModel):
 
 class BillDetails(BaseModel):
     """Detailed bill information for queries"""
+
     id: str
     description: str
     total_amount: Decimal
@@ -116,6 +130,7 @@ class BillDetails(BaseModel):
 
 class ParticipantDetails(BaseModel):
     """Detailed participant information for bill queries"""
+
     id: str
     name: str
     phone_number: str
@@ -128,6 +143,7 @@ class ParticipantDetails(BaseModel):
 
 class BillFilters(BaseModel):
     """Filters for bill queries"""
+
     status: Optional[BillStatus] = None
     date_from: Optional[datetime] = None
     date_to: Optional[datetime] = None
@@ -140,6 +156,7 @@ class BillFilters(BaseModel):
 
 class BillStatusInfo(BaseModel):
     """Bill status information"""
+
     id: str
     description: str
     total_amount: Decimal
@@ -153,6 +170,7 @@ class BillStatusInfo(BaseModel):
 
 class ValidationResult(BaseModel):
     """Result of data validation"""
+
     is_valid: bool
     errors: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
@@ -160,10 +178,11 @@ class ValidationResult(BaseModel):
 
 class ErrorResponse(BaseModel):
     """Standardized error response"""
+
     error_type: ErrorType
     message: str
     details: Optional[Dict[str, Any]] = None
     timestamp: datetime = Field(default_factory=datetime.now)
-# 
-Forward reference resolution
+
+
 BillDetails.model_rebuild()
