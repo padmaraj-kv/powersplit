@@ -61,3 +61,7 @@ htmlcov/
 # Temporary files
 *.tmp
 *.temp
+
+# Downloaded media files
+support_files/
+downloaded_media/

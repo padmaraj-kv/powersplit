@@ -47,6 +47,10 @@ class Settings(BaseSettings):
         ..., description="AES encryption key for sensitive data"
     )
 
+    # Twilio settings
+    twilio_account_sid: str = Field(..., description="Twilio Account SID for media downloads")
+    twilio_auth_token: str = Field(..., description="Twilio Auth Token for media downloads")
+
     # Rate limiting settings
     rate_limit_requests: int = Field(
         default=100, description="Requests per minute per user"
@@ -201,6 +205,8 @@ def validate_configuration() -> bool:
             "sarvam_api_key",
             "gemini_api_key",
             "encryption_key",
+            "twilio_account_sid",
+            "twilio_auth_token",
         ]
 
         missing_settings = []
