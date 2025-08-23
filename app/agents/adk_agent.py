@@ -2,16 +2,17 @@
 ADK agent implementation for bill extraction using Google's Agent Development Kit
 """
 
-from typing import Dict, Any, Optional, List
-import asyncio
+from typing import Dict, Any
+
+# asyncio is used by the ADK runner
 from decimal import Decimal
 import json
 
 from google.adk.agents import Agent
-from google.adk.tools import Tool
+from google.adk.tools import FunctionTool
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService, Session
-from google.adk.models.gemini import Gemini
+from google.adk.models import LiteLlm
 
 from app.models.schemas import BillData, BillItem
 from app.core.config import settings
@@ -32,18 +33,18 @@ class BillExtractionADKAgent:
 
     def __init__(self):
         self.session_service = InMemorySessionService()
-        self.model = Gemini(api_key=settings.gemini_api_key)
+        # Use LiteLLM with Gemini model
+        self.model = LiteLlm(model="gemini/gemini-pro", api_key=settings.gemini_api_key)
         self.agent = self._create_agent()
         self.runner = Runner(agent=self.agent)
 
     def _create_agent(self) -> Agent:
         """Create and configure the ADK agent with tools"""
         # Define the extract_bill tool
-        extract_bill_tool = Tool(
+        extract_bill_tool = FunctionTool(
+            func=self._extract_bill_from_text,
             name="extract_bill",
             description="Extract bill information from text",
-            function=self._extract_bill_from_text,
-            output_key="bill_data",
         )
 
         # Create the agent with the tool
@@ -160,8 +161,11 @@ class BillExtractionADKAgent:
                 agent=self.agent, user_message=text, session=session
             )
 
-            # Get the extracted bill data from the session state
-            bill_json = session.state.get("bill_data", {})
+            # Get the extracted bill data from the response
+            bill_json = response.get("extract_bill", {})
+            if not bill_json:
+                # Try to find it in the session state for backward compatibility
+                bill_json = session.state.get("bill_data", {})
 
             # Convert to BillData object
             items = []
