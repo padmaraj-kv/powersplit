@@ -185,4 +185,5 @@ class ErrorResponse(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
 
 
+# Forward reference resolution
 BillDetails.model_rebuild()

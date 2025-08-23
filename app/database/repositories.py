@@ -78,6 +78,37 @@ class SQLUserRepository(UserRepository):
             self.db.rollback()
             logger.error(f"Failed to update user: {e}")
             raise
+    
+    # BaseRepository abstract methods implementation
+    async def create(self, entity: User) -> User:
+        """Create a new user entity"""
+        self.db.add(entity)
+        self.db.commit()
+        self.db.refresh(entity)
+        return entity
+    
+    async def get_by_id(self, entity_id: UUID) -> Optional[User]:
+        """Get user by ID"""
+        return await self.get_user_by_id(entity_id)
+    
+    async def update(self, entity_id: UUID, updates: Dict[str, Any]) -> Optional[User]:
+        """Update user by ID"""
+        return await self.update_user(entity_id, **updates)
+    
+    async def delete(self, entity_id: UUID) -> bool:
+        """Delete user by ID"""
+        try:
+            user = await self.get_user_by_id(entity_id)
+            if user:
+                self.db.delete(user)
+                self.db.commit()
+                logger.info(f"Deleted user {entity_id}")
+                return True
+            return False
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Failed to delete user: {e}")
+            raise
 
 
 class SQLContactRepository(ContactRepository):
@@ -138,6 +169,41 @@ class SQLContactRepository(ContactRepository):
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to update contact: {e}")
+            raise
+    
+    # BaseRepository abstract methods implementation
+    async def create(self, entity: Contact) -> Contact:
+        """Create a new contact entity"""
+        self.db.add(entity)
+        self.db.commit()
+        self.db.refresh(entity)
+        return entity
+    
+    async def get_by_id(self, entity_id: UUID) -> Optional[Contact]:
+        """Get contact by ID"""
+        try:
+            return self.db.query(Contact).filter(Contact.id == entity_id).first()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get contact by ID: {e}")
+            raise
+    
+    async def update(self, entity_id: UUID, updates: Dict[str, Any]) -> Optional[Contact]:
+        """Update contact by ID"""
+        return await self.update_contact(entity_id, **updates)
+    
+    async def delete(self, entity_id: UUID) -> bool:
+        """Delete contact by ID"""
+        try:
+            contact = await self.get_by_id(entity_id)
+            if contact:
+                self.db.delete(contact)
+                self.db.commit()
+                logger.info(f"Deleted contact {entity_id}")
+                return True
+            return False
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Failed to delete contact: {e}")
             raise
 
 
@@ -224,6 +290,53 @@ class SQLBillRepository(BillRepository):
         except SQLAlchemyError as e:
             self.db.rollback()
             logger.error(f"Failed to update bill status: {e}")
+            raise
+    
+    # BaseRepository abstract methods implementation
+    async def create(self, entity: Bill) -> Bill:
+        """Create a new bill entity"""
+        self.db.add(entity)
+        self.db.commit()
+        self.db.refresh(entity)
+        return entity
+    
+    async def get_by_id(self, entity_id: UUID) -> Optional[Bill]:
+        """Get bill by ID"""
+        return await self.get_bill_by_id(entity_id)
+    
+    async def update(self, entity_id: UUID, updates: Dict[str, Any]) -> Optional[Bill]:
+        """Update bill by ID"""
+        try:
+            bill = await self.get_bill_by_id(entity_id)
+            if not bill:
+                return None
+            
+            for key, value in updates.items():
+                if hasattr(bill, key):
+                    setattr(bill, key, value)
+            
+            self.db.commit()
+            self.db.refresh(bill)
+            logger.info(f"Updated bill {entity_id}")
+            return bill
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Failed to update bill: {e}")
+            raise
+    
+    async def delete(self, entity_id: UUID) -> bool:
+        """Delete bill by ID"""
+        try:
+            bill = await self.get_bill_by_id(entity_id)
+            if bill:
+                self.db.delete(bill)
+                self.db.commit()
+                logger.info(f"Deleted bill {entity_id}")
+                return True
+            return False
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Failed to delete bill: {e}")
             raise
 
 
@@ -402,6 +515,57 @@ class SQLPaymentRepository(PaymentRepository):
             self.db.rollback()
             logger.error(f"Failed to mark payment request as sent: {e}")
             raise
+    
+    # BaseRepository abstract methods implementation
+    async def create(self, entity: PaymentRequest) -> PaymentRequest:
+        """Create a new payment request entity"""
+        self.db.add(entity)
+        self.db.commit()
+        self.db.refresh(entity)
+        return entity
+    
+    async def get_by_id(self, entity_id: UUID) -> Optional[PaymentRequest]:
+        """Get payment request by ID"""
+        try:
+            return self.db.query(PaymentRequest).filter(PaymentRequest.id == entity_id).first()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get payment request by ID: {e}")
+            raise
+    
+    async def update(self, entity_id: UUID, updates: Dict[str, Any]) -> Optional[PaymentRequest]:
+        """Update payment request by ID"""
+        try:
+            payment_request = await self.get_by_id(entity_id)
+            if not payment_request:
+                return None
+            
+            for key, value in updates.items():
+                if hasattr(payment_request, key):
+                    setattr(payment_request, key, value)
+            
+            self.db.commit()
+            self.db.refresh(payment_request)
+            logger.info(f"Updated payment request {entity_id}")
+            return payment_request
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Failed to update payment request: {e}")
+            raise
+    
+    async def delete(self, entity_id: UUID) -> bool:
+        """Delete payment request by ID"""
+        try:
+            payment_request = await self.get_by_id(entity_id)
+            if payment_request:
+                self.db.delete(payment_request)
+                self.db.commit()
+                logger.info(f"Deleted payment request {entity_id}")
+                return True
+            return False
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Failed to delete payment request: {e}")
+            raise
 
 
 class SQLConversationRepository(ConversationRepository):
@@ -501,6 +665,99 @@ class SQLConversationRepository(ConversationRepository):
                    .all())
         except SQLAlchemyError as e:
             logger.error(f"Failed to get active conversations: {e}")
+            raise
+    
+    # BaseRepository abstract methods implementation
+    async def create(self, entity: ConversationState) -> ConversationState:
+        """Create a new conversation state entity"""
+        self.db.add(entity)
+        self.db.commit()
+        self.db.refresh(entity)
+        return entity
+    
+    async def get_by_id(self, entity_id: UUID) -> Optional[ConversationState]:
+        """Get conversation state by ID"""
+        try:
+            return self.db.query(ConversationState).filter(ConversationState.id == entity_id).first()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to get conversation state by ID: {e}")
+            raise
+    
+    async def update(self, entity_id: UUID, updates: Dict[str, Any]) -> Optional[ConversationState]:
+        """Update conversation state by ID"""
+        try:
+            conversation = await self.get_by_id(entity_id)
+            if not conversation:
+                return None
+            
+            for key, value in updates.items():
+                if hasattr(conversation, key):
+                    setattr(conversation, key, value)
+            
+            self.db.commit()
+            self.db.refresh(conversation)
+            logger.info(f"Updated conversation state {entity_id}")
+            return conversation
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Failed to update conversation state: {e}")
+            raise
+    
+    async def delete(self, entity_id: UUID) -> bool:
+        """Delete conversation state by ID"""
+        try:
+            conversation = await self.get_by_id(entity_id)
+            if conversation:
+                self.db.delete(conversation)
+                self.db.commit()
+                logger.info(f"Deleted conversation state {entity_id}")
+                return True
+            return False
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Failed to delete conversation state: {e}")
+            raise
+    
+    # ConversationRepository specific abstract methods
+    async def save_conversation_state(self, state: ConversationState) -> ConversationState:
+        """Save or update conversation state"""
+        try:
+            # Check if state already exists
+            existing = await self.get_conversation_state(state.user_id, state.session_id)
+            if existing:
+                # Update existing state
+                for key, value in state.__dict__.items():
+                    if not key.startswith('_') and hasattr(existing, key):
+                        setattr(existing, key, value)
+                self.db.commit()
+                self.db.refresh(existing)
+                logger.info(f"Updated conversation state for user {state.user_id}, session {state.session_id}")
+                return existing
+            else:
+                # Create new state
+                self.db.add(state)
+                self.db.commit()
+                self.db.refresh(state)
+                logger.info(f"Created conversation state for user {state.user_id}, session {state.session_id}")
+                return state
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Failed to save conversation state: {e}")
+            raise
+    
+    async def clear_conversation_state(self, user_id: UUID, session_id: str) -> bool:
+        """Clear conversation state"""
+        try:
+            state = await self.get_conversation_state(user_id, session_id)
+            if state:
+                self.db.delete(state)
+                self.db.commit()
+                logger.info(f"Cleared conversation state for user {user_id}, session {session_id}")
+                return True
+            return False
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Failed to clear conversation state: {e}")
             raise
 
 
