@@ -3,16 +3,17 @@ ADK agent implementation for bill extraction using Google's Agent Development Ki
 """
 
 from typing import Dict, Any
-
-# asyncio is used by the ADK runner
 from decimal import Decimal
 import json
 
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
 from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService, Session
-from google.adk.models import LiteLlm
+from google.adk.sessions import InMemorySessionService
+
+# Import both litellm and LiteLlm wrapper from google.adk.models
+import litellm
+from google.adk.models.lite_llm import LiteLlm
 
 from app.models.schemas import BillData, BillItem
 from app.core.config import settings
@@ -32,36 +33,41 @@ class BillExtractionADKAgent:
     """
 
     def __init__(self):
+        # Create session service
         self.session_service = InMemorySessionService()
-        # Use LiteLLM with Gemini model
-        self.model = LiteLlm(model="gemini/gemini-pro", api_key=settings.gemini_api_key)
+        # Use LiteLlm wrapper with Gemini model
+        litellm.api_key = settings.gemini_api_key
+        self.model = LiteLlm(model="gemini/gemini-pro")
         self.agent = self._create_agent()
-        self.runner = Runner(agent=self.agent)
+        # Initialize runner with required app_name and session_service
+        self.runner = Runner(
+            agent=self.agent,
+            app_name="bill-splitting-agent",
+            session_service=self.session_service,
+        )
 
     def _create_agent(self) -> Agent:
         """Create and configure the ADK agent with tools"""
         # Define the extract_bill tool
+        # Updated FunctionTool initialization to match current ADK API
         extract_bill_tool = FunctionTool(
-            func=self._extract_bill_from_text,
-            name="extract_bill",
-            description="Extract bill information from text",
+            self._extract_bill_from_text,
+            # No 'name' parameter - ADK now uses the function name directly
         )
 
         # Create the agent with the tool
         agent = Agent(
             name="BillExtractionAgent",
             description="An agent that extracts bill information from text input",
-            instructions="""
-            You are a bill extraction agent that helps users extract bill information from text.
-            When given text about a bill, extract the following information:
-            - Total amount
-            - Description/purpose of the bill
-            - Merchant/restaurant name if available
-            - Individual items with name, amount, and quantity if available
-            - Currency (default to INR)
-            
-            Use the extract_bill tool to process the text and return structured bill data.
-            """,
+            instruction="""You are a bill extraction agent that helps users extract bill information from text.
+When given text about a bill, extract the following information:
+- Total amount
+- Description/purpose of the bill
+- Merchant/restaurant name if available
+- Individual items with name, amount, and quantity if available
+- Currency (default to INR)
+
+Use the extract_bill tool to process the text and return structured bill data.""",
             tools=[extract_bill_tool],
             model=self.model,
         )
@@ -108,6 +114,7 @@ class BillExtractionADKAgent:
             - Be conservative with amounts - only extract clear numbers
             """
 
+            # Use the LiteLlm wrapper's generate_content method
             response = await self.model.generate_content(prompt)
             response_text = response.text
 
@@ -145,27 +152,29 @@ class BillExtractionADKAgent:
             BillData object with extracted information
         """
         try:
-            # Get or create a session
-            session = await self.session_service.get_session(
-                app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID
-            )
+            # Create a session ID for this conversation
+            user_id = USER_ID
+            session_id = SESSION_ID
 
-            if not session:
-                session = Session(
-                    app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID, state={}
-                )
-                await self.session_service.save_session(session)
+            # Run the agent with the text input using the updated Runner API
+            from google.genai import types
 
-            # Run the agent with the text input
-            response = await self.runner.run_agent(
-                agent=self.agent, user_message=text, session=session
-            )
+            content = types.Content(role="user", parts=[types.Part(text=text)])
+
+            # Get the response from the agent
+            response = {}
+            async for event in self.runner.run_async(
+                user_id=user_id, session_id=session_id, new_message=content
+            ):
+                if event.is_final_response():
+                    if event.content and event.content.parts:
+                        response = {
+                            "extract_bill": json.loads(event.content.parts[0].text)
+                        }
+                    break
 
             # Get the extracted bill data from the response
             bill_json = response.get("extract_bill", {})
-            if not bill_json:
-                # Try to find it in the session state for backward compatibility
-                bill_json = session.state.get("bill_data", {})
 
             # Convert to BillData object
             items = []
